@@ -271,7 +271,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
     <div class="cov-item"><div class="cov-dot" style="background:#4ade80"></div>Ex-packaging</div>
     <div class="cov-item"><div class="cov-dot" style="background:#fbbf24"></div>Estimert</div>
     <div class="cov-item"><div class="cov-dot" style="background:#818cf8"></div>Farmgate</div>
-    <span style="margin-left:auto;font-size:10px">Alle priser €/100kg</span>
+    <span style="margin-left:auto;font-size:10px">Alle priser €/kg</span>
   </div>
 
   <div class="filter-row-wrap">
@@ -348,29 +348,29 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
 // PRODUKTKONFIGURASJON
 // ============================================================
 const PRODUCT_CONFIG = {
-  avocado:     {name:'Avokado',   emoji:'🥑',color:'#4ade80',cat:'frukt',euProduct:'Avocados',      unit:'/100kg',hasIndex:true },
-  strawberry:  {name:'Jordbær',   emoji:'🍓',color:'#f87171',cat:'baer', euProduct:'Strawberries',  unit:'/100kg',hasIndex:true },
-  raspberry:   {name:'Bringebær', emoji:'🫐',color:'#e879f9',cat:'baer', euProduct:'Raspberries',   unit:'/100kg',hasIndex:true },
-  banana:      {name:'Banan',     emoji:'🍌',color:'#fef08a',cat:'frukt',euProduct:'Bananas',       unit:'/100kg',hasIndex:true },
-  tomato:      {name:'Tomat',     emoji:'🍅',color:'#f97316',cat:'gronn',euProduct:'Tomatoes',      unit:'/100kg',hasIndex:true },
-  apple:       {name:'Eple',      emoji:'🍎',color:'#ef4444',cat:'frukt',euProduct:'Apples',        unit:'/100kg',hasIndex:true },
-  orange:      {name:'Appelsin',  emoji:'🍊',color:'#fb923c',cat:'frukt',euProduct:'Oranges',       unit:'/100kg',hasIndex:true },
-  pepper:      {name:'Paprika',   emoji:'🫑',color:'#fcd34d',cat:'gronn',euProduct:'Sweet peppers', unit:'/100kg',hasIndex:true },
-  cucumber:    {name:'Agurk',     emoji:'🥒',color:'#22c55e',cat:'gronn',euProduct:'Cucumbers',     unit:'/100kg',hasIndex:true },
-  lettuce:     {name:'Isbergsalat',emoji:'🥬',color:'#34d399',cat:'gronn',euProduct:'Lettuces',     unit:'/100 hd',hasIndex:true},
-  grape:       {name:'Druer',     emoji:'🍇',color:'#a78bfa',cat:'frukt',euProduct:'Table grapes',  unit:'/100kg',hasIndex:true },
-  cauliflower: {name:'Blomkål',   emoji:'🥦',color:'#e2e8f0',cat:'gronn',euProduct:'Cauliflowers',  unit:'/100 st',hasIndex:true},
-  carrot:      {name:'Gulrot',    emoji:'🥕',color:'#fb923c',cat:'gronn',euProduct:'Carrots',       unit:'/100kg',hasIndex:true },
-  blueberry:   {name:'Blåbær',    emoji:'🫐',color:'#818cf8',cat:'baer', euProduct:'Blueberries',   unit:'/100kg',hasIndex:true },
-  cherry:      {name:'Kirsebær',  emoji:'🍒',color:'#f43f5e',cat:'baer', euProduct:'Cherries',      unit:'/100kg',hasIndex:true },
-  pear:        {name:'Pære',      emoji:'🍐',color:'#a3e635',cat:'frukt',euProduct:'Pears',         unit:'/100kg',hasIndex:true },
-  broccoli:    {name:'Brokkoli',  emoji:'🥦',color:'#16a34a',cat:'gronn',euProduct:'Broccoli',      unit:'/100kg',hasIndex:true },
-  mango:       {name:'Mango',     emoji:'🥭',color:'#fcd34d',cat:'frukt',euProduct:null,            unit:'/100kg',hasIndex:false},
-  peach:       {name:'Fersken',   emoji:'🍑',color:'#fbbf24',cat:'frukt',euProduct:'Peaches',       unit:'/100kg',hasIndex:true },
+  avocado:     {name:'Avokado',   emoji:'🥑',color:'#4ade80',cat:'frukt',euProduct:'Avocados',      unit:'/kg',hasIndex:true },
+  strawberry:  {name:'Jordbær',   emoji:'🍓',color:'#f87171',cat:'baer', euProduct:'Strawberries',  unit:'/kg',hasIndex:true },
+  raspberry:   {name:'Bringebær', emoji:'🫐',color:'#e879f9',cat:'baer', euProduct:'Raspberries',   unit:'/kg',hasIndex:true },
+  banana:      {name:'Banan',     emoji:'🍌',color:'#fef08a',cat:'frukt',euProduct:'Bananas',       unit:'/kg',hasIndex:true },
+  tomato:      {name:'Tomat',     emoji:'🍅',color:'#f97316',cat:'gronn',euProduct:'Tomatoes',      unit:'/kg',hasIndex:true },
+  apple:       {name:'Eple',      emoji:'🍎',color:'#ef4444',cat:'frukt',euProduct:'Apples',        unit:'/kg',hasIndex:true },
+  orange:      {name:'Appelsin',  emoji:'🍊',color:'#fb923c',cat:'frukt',euProduct:'Oranges',       unit:'/kg',hasIndex:true },
+  pepper:      {name:'Paprika',   emoji:'🫑',color:'#fcd34d',cat:'gronn',euProduct:'Sweet peppers', unit:'/kg',hasIndex:true },
+  cucumber:    {name:'Agurk',     emoji:'🥒',color:'#22c55e',cat:'gronn',euProduct:'Cucumbers',     unit:'/kg',hasIndex:true },
+  lettuce:     {name:'Isbergsalat',emoji:'🥬',color:'#34d399',cat:'gronn',euProduct:'Lettuces',     unit:'/hd',hasIndex:true},
+  grape:       {name:'Druer',     emoji:'🍇',color:'#a78bfa',cat:'frukt',euProduct:'Table grapes',  unit:'/kg',hasIndex:true },
+  cauliflower: {name:'Blomkål',   emoji:'🥦',color:'#e2e8f0',cat:'gronn',euProduct:'Cauliflowers',  unit:'/st',hasIndex:true},
+  carrot:      {name:'Gulrot',    emoji:'🥕',color:'#fb923c',cat:'gronn',euProduct:'Carrots',       unit:'/kg',hasIndex:true },
+  blueberry:   {name:'Blåbær',    emoji:'🫐',color:'#818cf8',cat:'baer', euProduct:'Blueberries',   unit:'/kg',hasIndex:true },
+  cherry:      {name:'Kirsebær',  emoji:'🍒',color:'#f43f5e',cat:'baer', euProduct:'Cherries',      unit:'/kg',hasIndex:true },
+  pear:        {name:'Pære',      emoji:'🍐',color:'#a3e635',cat:'frukt',euProduct:'Pears',         unit:'/kg',hasIndex:true },
+  broccoli:    {name:'Brokkoli',  emoji:'🥦',color:'#16a34a',cat:'gronn',euProduct:'Broccoli',      unit:'/kg',hasIndex:true },
+  mango:       {name:'Mango',     emoji:'🥭',color:'#fcd34d',cat:'frukt',euProduct:null,            unit:'/kg',hasIndex:false},
+  peach:       {name:'Fersken',   emoji:'🍑',color:'#fbbf24',cat:'frukt',euProduct:'Peaches',       unit:'/kg',hasIndex:true },
   // SOPP
-  champignon:  {name:'Champignon',emoji:'🍄',color:'#d4b896',cat:'sopp', euProduct:null,            unit:'/100kg',hasIndex:false},
-  shiitake:    {name:'Shiitake',  emoji:'🍄',color:'#c8a87a',cat:'sopp', euProduct:null,            unit:'/100kg',hasIndex:false},
-  oyster:      {name:'Østerssopp',emoji:'🍄',color:'#b8c4cc',cat:'sopp', euProduct:null,            unit:'/100kg',hasIndex:false},
+  champignon:  {name:'Champignon',emoji:'🍄',color:'#d4b896',cat:'sopp', euProduct:null,            unit:'/kg',hasIndex:false},
+  shiitake:    {name:'Shiitake',  emoji:'🍄',color:'#c8a87a',cat:'sopp', euProduct:null,            unit:'/kg',hasIndex:false},
+  oyster:      {name:'Østerssopp',emoji:'🍄',color:'#b8c4cc',cat:'sopp', euProduct:null,            unit:'/kg',hasIndex:false},
 };
 
 const SEASONAL_BASE = {
@@ -750,7 +750,7 @@ function renderSidebar(){
           <div class="product-sub">${src==='live'?'● LIVE':src==='estimert'?'○ EST':'···'}</div>
         </div>
         <div class="product-price-col">
-          <div class="product-price" style="color:${cfg.color}">${price!==null?'€'+price.toFixed(0):'···'}</div>
+          <div class="product-price" style="color:${cfg.color}">${price!==null?'€'+(price/100).toFixed(2):'···'}</div>
           <div class="product-change ${chgCls}">${chgTxt}</div>
         </div>
       </button>`;
@@ -801,7 +801,7 @@ function renderKpiGrid(filter){
     card.style.borderBottom=`2px solid ${cfg.color}`;
     card.innerHTML=`
       <div class="kpi-top"><div class="kpi-label">${cfg.name}</div><div class="kpi-emoji">${cfg.emoji}</div></div>
-      <div class="kpi-price" style="color:${cfg.color}">${price!==null?price.toFixed(0):'···'}<span class="kpi-unit"> €${cfg.unit}</span></div>
+      <div class="kpi-price" style="color:${cfg.color}">${price!==null?(price/100).toFixed(2):'···'}<span class="kpi-unit"> €${cfg.unit}</span></div>
       <div class="kpi-meta">
         <span class="kpi-badge ${badgeCls}">${chg!==null?(chg>0?'+':'')+chg+'% 7d':'···'}</span>
         <span class="kpi-badge ${src==='live'?'badge-live':'badge-est'}">${src==='live'?'LIVE':'EST'}</span>
@@ -844,7 +844,7 @@ function buildMainChart(key,range){
       <div class="chart-header">
         <div>
           <div class="chart-title">${cfg.emoji} ${cfg.name} — Prisutvikling & Prognose</div>
-          <div class="chart-subtitle">${d.source==='live'?'● EU AGRIDATA LIVE':'○ SESONG-ESTIMAT'} · ${currentStage.toUpperCase()} · ${cfg.unit.toUpperCase()}</div>
+          <div class="chart-subtitle">${d.source==='live'?'● EU AGRIDATA LIVE':'○ SESONG-ESTIMAT'} · ${currentStage.toUpperCase()} · ${('/KG')}</div>
         </div>
         <div class="chart-controls">
           <button class="ctrl-btn${range==='3m'?' active':''}" onclick="setRange('3m',this)">3M</button>
@@ -874,10 +874,10 @@ function buildMainChart(key,range){
     interaction:{mode:'index',intersect:false},
     plugins:{legend:{display:false},tooltip:{backgroundColor:'#1c2638',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
       titleColor:'#8a95aa',bodyColor:'#e8edf5',titleFont:{family:'DM Mono',size:9},bodyFont:{family:'DM Mono',size:11},padding:8,
-      callbacks:{label:c=>{if(c.datasetIndex===0&&c.raw!==null)return` Pris: €${c.raw}`;if(c.datasetIndex===1&&c.raw!==null)return` Prognose: €${c.raw}`;return null;}}}},
+      callbacks:{label:c=>{if(c.datasetIndex===0&&c.raw!==null)return` Pris: €${(c.raw/100).toFixed(2)}/kg`;if(c.datasetIndex===1&&c.raw!==null)return` Prognose: €${(c.raw/100).toFixed(2)}/kg`;return null;}}}},
     scales:{
       x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#4e5a70',font:{family:'DM Mono',size:9},maxTicksLimit:10,maxRotation:0},border:{color:'rgba(255,255,255,.05)'}},
-      y:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#4e5a70',font:{family:'DM Mono',size:9},callback:v=>'€'+v},border:{color:'rgba(255,255,255,.05)'}}
+      y:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#4e5a70',font:{family:'DM Mono',size:9},callback:v=>'€'+(v/100).toFixed(2)},border:{color:'rgba(255,255,255,.05)'}}
     }}});
 }
 
@@ -911,11 +911,11 @@ function buildDetailPanels(key){
   forecastHtml+='</div>';
 
   const cDiff={DE:1.02,NL:.97,FR:1.06,ES:.91};
-  const cPrices=Object.entries(cDiff).map(([c,m])=>[c,Math.round(d.latest*m)]);
+  const cPrices=Object.entries(cDiff).map(([c,m])=>[c,((d.latest*m)/100).toFixed(2)]);
   const vals=cPrices.map(([,v])=>v);const mn=Math.min(...vals),mx=Math.max(...vals);
   let hmHtml='<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-bottom:5px">Estimert engros per land</div><div class="heatmap-grid"><div class="heatmap-cell heatmap-header"></div>';
   cPrices.forEach(([c])=>{hmHtml+=`<div class="heatmap-cell heatmap-header">${c}</div>`;});
-  hmHtml+='<div class="heatmap-row-label">€/100kg</div>';
+  hmHtml+='<div class="heatmap-row-label">€/kg</div>';
   cPrices.forEach(([,v])=>{
     const r=(v-mn)/(mx-mn+.01);
     const hc=r<.25?'heat-vl':r<.5?'heat-l':r<.75?'heat-h':'heat-vh';
@@ -962,7 +962,7 @@ function buildDetailPanels(key){
       <div>
         <div class="info-row"><span class="info-key">PRODUKT</span><span style="font-weight:600;color:${cfg.color}">${cfg.emoji} ${cfg.name}</span></div>
         <div class="info-row"><span class="info-key">EU PRODUKT-ID</span><span style="font-family:'DM Mono',monospace;font-size:11px">${cfg.euProduct||'Ikke i EU Agridata'}</span></div>
-        <div class="info-row"><span class="info-key">PRISNIVÅ</span><span style="font-family:'DM Mono',monospace">€${d.latest.toFixed(0)} ${cfg.unit}</span></div>
+        <div class="info-row"><span class="info-key">PRISNIVÅ</span><span style="font-family:'DM Mono',monospace">€${(d.latest/100).toFixed(2)} ${cfg.unit}</span></div>
         <div class="info-row"><span class="info-key">UKENTLIG ENDRING</span><span style="font-family:'DM Mono',monospace;color:${d.weekChange>0?'var(--up)':d.weekChange<0?'var(--down)':'var(--neutral)'}">${d.weekChange>0?'+':''}${d.weekChange}%</span></div>
         <div class="info-row"><span class="info-key">KILDE</span><span style="color:${d.source==='live'?'var(--up)':'var(--neutral)'}">${d.source==='live'?'✅ EU Agridata Live':'⚠️ Sesong-estimat'}</span></div>
         <div class="info-row"><span class="info-key">KATEGORI</span><span>${cfg.cat==='frukt'?'🍎 Frukt':cfg.cat==='baer'?'🫐 Bær':cfg.cat==='sopp'?'🍄 Sopp':'🥬 Grønnsaker'}</span></div>
