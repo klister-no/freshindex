@@ -534,19 +534,23 @@ function getWeekNumber(d){
 function currentWeek(){return getWeekNumber(new Date());}
 
 // ============================================================
-// EU AGRIDATA API
+// EU AGRIDATA API — via egen Cloudflare Worker proxy
 // ============================================================
+const WORKER_URL = 'https://freshindex.erik-d2d.workers.dev';
+
+// Worker-en tar samme path+params som EU Agridata API direkte
+// Fallback til åpne proxier hvis Worker skulle være nede
 const PROXIES = [
+  u => { const p=new URL(u); return `${WORKER_URL}${p.pathname}${p.search}`; },
   u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
   u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u=>`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
 ];
 
 async function fetchWithProxy(targetUrl){
   for(const fn of PROXIES){
     try{
       const ctrl=new AbortController();
-      const t=setTimeout(()=>ctrl.abort(),8000);
+      const t=setTimeout(()=>ctrl.abort(),10000);
       const res=await fetch(fn(targetUrl),{signal:ctrl.signal});
       clearTimeout(t);
       if(res.ok){const d=await res.json();if(d&&!d.error)return d;}
