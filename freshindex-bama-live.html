@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FreshIndex BAMA — Live EU Prismonitor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:#090d18; --bg2:#0d1220; --bg3:#131929;
+    --panel:#182030; --panel2:#1c2638;
+    --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.13);
+    --text:#e8edf5; --text2:#8a95aa; --text3:#4e5a70;
+    --up:#4ade80; --down:#f87171; --neutral:#fbbf24; --accent:#3b82f6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(59,130,246,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,0.025) 1px,transparent 1px);background-size:44px 44px;pointer-events:none;z-index:0;}
+  .app{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh;}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:14px 28px;border-bottom:1px solid var(--border);background:rgba(9,13,24,0.92);backdrop-filter:blur(20px);position:sticky;top:0;z-index:100;}
+  .logo{display:flex;align-items:center;gap:10px;}
+  .logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#4ade80,#3b82f6);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;}
+  .logo-text{font-family:'DM Serif Display',serif;font-size:20px;letter-spacing:-0.5px;}
+  .logo-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:1.2px;text-transform:uppercase;}
+  .header-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .live-badge{display:flex;align-items:center;gap:6px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:4px 11px;font-size:10px;color:var(--up);font-family:'DM Mono',monospace;}
+  .live-dot{width:6px;height:6px;background:var(--up);border-radius:50%;animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+  .header-tag{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;}
+  .data-status{font-size:10px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:6px;border:1px solid var(--border2);}
+  .status-live{background:rgba(74,222,128,0.1);color:var(--up);border-color:rgba(74,222,128,0.3);}
+  .status-loading{background:rgba(251,191,36,0.1);color:var(--neutral);border-color:rgba(251,191,36,0.3);}
+  .status-fallback{background:rgba(248,113,113,0.1);color:var(--down);border-color:rgba(248,113,113,0.3);}
+
+  .main{display:grid;grid-template-columns:230px 1fr;flex:1;}
+
+  /* SIDEBAR */
+  .sidebar{border-right:1px solid var(--border);background:var(--bg2);overflow-y:auto;max-height:calc(100vh - 57px);position:sticky;top:57px;}
+  .sidebar-inner{padding:14px 10px 24px;}
+  .cat-label{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);padding:0 8px;margin:14px 0 5px;display:flex;align-items:center;gap:8px;}
+  .cat-label::after{content:'';flex:1;height:1px;background:var(--border);}
+  .product-btn{width:100%;display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;border:1px solid transparent;background:transparent;cursor:pointer;transition:all 0.15s;margin-bottom:2px;position:relative;overflow:hidden;text-align:left;}
+  .product-btn:hover{background:var(--panel);border-color:var(--border);}
+  .product-btn.active{background:var(--panel2);border-color:var(--border2);}
+  .color-stripe{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px;}
+  .product-emoji{font-size:17px;flex-shrink:0;}
+  .product-info{flex:1;min-width:0;}
+  .product-name{font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .product-sub{font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;}
+  .product-price-col{text-align:right;flex-shrink:0;}
+  .product-price{font-size:12px;font-weight:600;font-family:'DM Mono',monospace;}
+  .product-change{font-size:9px;font-family:'DM Mono',monospace;}
+  .change-up{color:var(--up);}.change-down{color:var(--down);}.change-neutral{color:var(--neutral);}
+  .loading-price{color:var(--text3);font-size:10px;font-family:'DM Mono',monospace;}
+
+  /* CONTENT */
+  .content{padding:22px 26px;overflow-y:auto;}
+
+  /* COVERAGE BAR */
+  .info-bar{display:flex;align-items:center;gap:14px;padding:9px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;margin-bottom:18px;font-size:10px;color:var(--text2);font-family:'DM Mono',monospace;flex-wrap:wrap;}
+  .cov-item{display:flex;align-items:center;gap:5px;}
+  .cov-dot{width:7px;height:7px;border-radius:50%;}
+
+  /* FILTER */
+  .filter-row{display:flex;gap:5px;margin-bottom:18px;flex-wrap:wrap;}
+  .filter-btn{padding:5px 13px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:10px;font-family:'DM Mono',monospace;cursor:pointer;transition:all 0.15s;}
+  .filter-btn:hover{color:var(--text2);border-color:var(--border2);}
+  .filter-btn.active{background:var(--panel2);border-color:var(--border2);color:var(--text);}
+
+  /* KPI GRID */
+  .section-title{font-family:'DM Serif Display',serif;font-size:16px;margin-bottom:2px;letter-spacing:-0.2px;}
+  .section-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:14px;}
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:22px;}
+  .kpi-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:13px 15px;cursor:pointer;transition:all 0.15s;position:relative;overflow:hidden;animation:fadeUp 0.35s ease both;}
+  .kpi-card:hover{background:var(--panel2);border-color:var(--border2);transform:translateY(-1px);}
+  .kpi-card.selected{background:var(--panel2);border-color:var(--border2);}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  .kpi-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;}
+  .kpi-label{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.3px;}
+  .kpi-emoji{font-size:17px;}
+  .kpi-price{font-family:'DM Serif Display',serif;font-size:21px;letter-spacing:-0.5px;line-height:1;margin-bottom:3px;}
+  .kpi-unit{font-size:10px;color:var(--text3);font-weight:300;}
+  .kpi-meta{display:flex;align-items:center;gap:5px;margin-top:5px;flex-wrap:wrap;}
+  .kpi-badge{font-size:9px;font-family:'DM Mono',monospace;padding:1px 6px;border-radius:20px;font-weight:500;}
+  .badge-up{background:rgba(74,222,128,0.13);color:var(--up);}
+  .badge-down{background:rgba(248,113,113,0.13);color:var(--down);}
+  .badge-neutral{background:rgba(251,191,36,0.12);color:var(--neutral);}
+  .badge-live{background:rgba(59,130,246,0.12);color:#60a5fa;}
+  .badge-est{background:rgba(255,255,255,0.05);color:var(--text3);}
+  .sparkline-container{height:26px;margin-top:7px;}
+
+  /* CHART */
+  .chart-section{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px;}
+  .chart-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+  .chart-title{font-family:'DM Serif Display',serif;font-size:17px;letter-spacing:-0.3px;margin-bottom:2px;}
+  .chart-subtitle{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;}
+  .chart-controls{display:flex;gap:5px;}
+  .ctrl-btn{padding:4px 11px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:10px;font-family:'DM Mono',monospace;cursor:pointer;transition:all 0.12s;}
+  .ctrl-btn:hover{background:var(--panel2);color:var(--text);}
+  .ctrl-btn.active{background:var(--accent);border-color:var(--accent);color:white;}
+  .chart-wrap{position:relative;height:250px;}
+  .forecast-legend{display:flex;align-items:center;gap:12px;margin-top:9px;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;flex-wrap:wrap;}
+  .legend-item{display:flex;align-items:center;gap:5px;}
+  .legend-line{width:16px;height:2px;}
+  .legend-band{width:16px;height:6px;border-radius:2px;opacity:0.2;}
+
+  /* BOTTOM PANELS */
+  .bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
+  .panel-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;}
+  .panel-title{font-size:12px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:7px;}
+  .panel-icon{width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;}
+
+  /* SEASON */
+  .season-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:2px;}
+  .season-month{text-align:center;}
+  .season-bar{border-radius:3px;margin-bottom:3px;}
+  .season-now{outline:2px solid rgba(255,255,255,0.55);outline-offset:1px;}
+  .season-label{font-size:8px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+  /* FORECAST */
+  .forecast-row{display:flex;gap:6px;margin-bottom:12px;}
+  .forecast-item{flex:1;background:var(--bg3);border-radius:8px;padding:9px 6px;text-align:center;}
+  .forecast-period{font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:4px;text-transform:uppercase;}
+  .forecast-price{font-size:14px;font-family:'DM Serif Display',serif;margin-bottom:2px;}
+  .forecast-dir{font-size:9px;font-family:'DM Mono',monospace;}
+  .forecast-conf{font-size:8px;color:var(--text3);margin-top:2px;}
+
+  /* HEATMAP */
+  .heatmap-grid{display:grid;grid-template-columns:65px repeat(4,1fr);gap:3px;font-size:9px;font-family:'DM Mono',monospace;margin-top:12px;}
+  .heatmap-cell{padding:5px 3px;border-radius:4px;text-align:center;}
+  .heatmap-header{color:var(--text3);font-size:8px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;}
+  .heatmap-row-label{color:var(--text2);display:flex;align-items:center;padding-left:2px;font-size:9px;}
+  .heat-vl{background:rgba(74,222,128,0.2);color:#4ade80}
+  .heat-l{background:rgba(74,222,128,0.09);color:#86efac}
+  .heat-m{background:rgba(251,191,36,0.09);color:#fbbf24}
+  .heat-h{background:rgba(248,113,113,0.09);color:#fca5a5}
+  .heat-vh{background:rgba(248,113,113,0.2);color:#f87171}
+
+  /* PRESSURE BARS */
+  .trend-bar-wrap{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+  .trend-name{font-size:10px;color:var(--text2);width:75px;flex-shrink:0;}
+  .trend-bar-bg{flex:1;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;}
+  .trend-bar-fill{height:100%;border-radius:3px;transition:width 1s ease;}
+  .trend-pct{font-size:9px;font-family:'DM Mono',monospace;width:40px;text-align:right;flex-shrink:0;}
+
+  /* NEWS */
+  .news-item{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);}
+  .news-item:last-child{border-bottom:none;}
+  .news-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+  .news-body{flex:1;}
+  .news-headline{font-size:11px;color:var(--text);margin-bottom:2px;line-height:1.4;}
+  .news-meta{font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;display:flex;gap:8px;}
+
+  /* COMPARE */
+  .compare-wrap{height:190px;}
+
+  /* LOADING SPINNER */
+  .spinner{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,0.1);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:5px;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* API ERROR BANNER */
+  .api-banner{padding:10px 16px;border-radius:9px;margin-bottom:16px;font-size:11px;font-family:'DM Mono',monospace;display:none;}
+  .api-banner.show{display:flex;align-items:center;gap:8px;}
+  .api-banner.warn{background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);color:var(--neutral);}
+  .api-banner.ok{background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);color:var(--up);}
+
+  /* PRODUCT INFO TABLE */
+  .info-row{display:flex;justify-content:space-between;margin-bottom:7px;font-size:12px;}
+  .info-key{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;}
+
+  /* MARKET INDEX SIDEBAR */
+  .index-section{margin-top:16px;padding-top:14px;border-top:1px solid var(--border);}
+  .index-item{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:7px;margin-bottom:1px;}
+  .index-item:hover{background:var(--panel);}
+  .index-name{font-size:11px;color:var(--text2);}
+  .index-val{font-size:11px;font-family:'DM Mono',monospace;font-weight:500;}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🌿</div>
+    <div>
+      <div class="logo-text">FreshIndex</div>
+      <div class="logo-sub">BAMA Sortiment · EU Agridata Live</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><div class="live-dot"></div><span id="week-label">LASTER...</span></div>
+    <div class="data-status status-loading" id="data-status"><span class="spinner"></span>HENTER DATA</div>
+    <div class="header-tag">EU AGRIDATA · EX-PACKAGING · EUROSTAT</div>
+  </div>
+</header>
+
+<div class="main">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-inner">
+    <div id="sidebar-products"></div>
+
+    <div class="index-section">
+      <div class="cat-label">Markedsindekser</div>
+      <div class="index-item"><span class="index-name">FAO Food Price</span><span class="index-val" style="color:var(--up)">127.4 ↑</span></div>
+      <div class="index-item"><span class="index-name">EU F&G Indeks</span><span class="index-val" style="color:var(--neutral)">104.1 →</span></div>
+      <div class="index-item"><span class="index-name">EUR/USD</span><span class="index-val" style="color:var(--down)">1.048 ↓</span></div>
+      <div class="index-item"><span class="index-name">Fraktrater</span><span class="index-val" style="color:var(--up)">+8.2% ↑</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- API STATUS BANNER -->
+  <div class="api-banner" id="api-banner"></div>
+
+  <!-- COVERAGE INFO -->
+  <div class="info-bar">
+    <span>Prisledd:</span>
+    <div class="cov-item"><div class="cov-dot" style="background:#4ade80"></div>Ex-packaging (engros)</div>
+    <div class="cov-item"><div class="cov-dot" style="background:#fbbf24"></div>Estimert (ingen EU-indeks)</div>
+    <div class="cov-item"><div class="cov-dot" style="background:#818cf8"></div>Farmgate (produsentpris)</div>
+    <span style="margin-left:auto">Alle priser i €/100kg eller €/enhet</span>
+  </div>
+
+  <!-- PRICE STAGE SELECTOR -->
+  <div class="filter-row" id="stage-row">
+    <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;align-self:center">PRISNIVÅ:</span>
+    <button class="filter-btn active" onclick="setStage('Ex-packaging station price',this)">Ex-packaging</button>
+    <button class="filter-btn" onclick="setStage('Farmgate price',this)">Farmgate</button>
+    <button class="filter-btn" onclick="setStage('Retail buying price',this)">Retail</button>
+    <span style="margin-left:auto;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;align-self:center">FILTER:</span>
+    <button class="filter-btn active" onclick="filterCat('all',this)">Alle</button>
+    <button class="filter-btn" onclick="filterCat('frukt',this)">🍎 Frukt</button>
+    <button class="filter-btn" onclick="filterCat('baer',this)">🫐 Bær</button>
+    <button class="filter-btn" onclick="filterCat('gronn',this)">🥬 Grønnsaker</button>
+  </div>
+
+  <!-- KPI GRID -->
+  <div class="section-title">Markedsoversikt</div>
+  <div class="section-sub" id="kpi-subtitle">LASTER EU AGRIDATA...</div>
+  <div class="kpi-grid" id="kpi-grid"></div>
+
+  <!-- MAIN CHART -->
+  <div id="chart-area"></div>
+
+  <!-- DETAIL PANELS -->
+  <div class="bottom-grid" id="detail-panels"></div>
+
+  <!-- COMPARE CHART -->
+  <div class="panel-card" style="margin-bottom:18px">
+    <div class="panel-title"><div class="panel-icon" style="background:rgba(74,222,128,0.12)">📊</div>30-dagers prisendring — alle produkter</div>
+    <div class="compare-wrap"><canvas id="compare-chart"></canvas></div>
+  </div>
+
+</div>
+</div>
+</div>
+
+<script>
+// ============================================================
+// EU AGRIDATA API
+// ============================================================
+// CORS proxy — lar nettleseren kalle EU Agridata direkte fra GitHub Pages
+const PROXY = 'https://api.allorigins.win/raw?url=';
+const API_BASE = PROXY + encodeURIComponent('https://agridata.ec.europa.eu/api');
+
+// BAMA product mapping → EU Agridata product names
+const PRODUCT_CONFIG = {
+  avocado:     { name:'Avokado',    emoji:'🥑', color:'#4ade80', cat:'frukt', euProduct:'Avocados',      unit:'/100kg', hasIndex:true  },
+  strawberry:  { name:'Jordbær',    emoji:'🍓', color:'#f87171', cat:'baer',  euProduct:'Strawberries',  unit:'/100kg', hasIndex:true  },
+  raspberry:   { name:'Bringebær',  emoji:'🫐', color:'#e879f9', cat:'baer',  euProduct:'Raspberries',   unit:'/100kg', hasIndex:true  },
+  lettuce:     { name:'Isbergsalat',emoji:'🥬', color:'#34d399', cat:'gronn', euProduct:'Lettuces',      unit:'/100 heads', hasIndex:true },
+  tomato:      { name:'Tomat',      emoji:'🍅', color:'#f97316', cat:'gronn', euProduct:'Tomatoes',      unit:'/100kg', hasIndex:true  },
+  apple:       { name:'Eple',       emoji:'🍎', color:'#ef4444', cat:'frukt', euProduct:'Apples',        unit:'/100kg', hasIndex:true  },
+  orange:      { name:'Appelsin',   emoji:'🍊', color:'#fb923c', cat:'frukt', euProduct:'Oranges',       unit:'/100kg', hasIndex:true  },
+  pepper:      { name:'Paprika',    emoji:'🫑', color:'#fcd34d', cat:'gronn', euProduct:'Sweet peppers', unit:'/100kg', hasIndex:true  },
+  cucumber:    { name:'Agurk',      emoji:'🥒', color:'#22c55e', cat:'gronn', euProduct:'Cucumbers',     unit:'/100kg', hasIndex:true  },
+  grape:       { name:'Druer',      emoji:'🍇', color:'#a78bfa', cat:'frukt', euProduct:'Table grapes',  unit:'/100kg', hasIndex:true  },
+  cauliflower: { name:'Blomkål',    emoji:'🥦', color:'#e2e8f0', cat:'gronn', euProduct:'Cauliflowers',  unit:'/100 units', hasIndex:true },
+  carrot:      { name:'Gulrot',     emoji:'🥕', color:'#fb923c', cat:'gronn', euProduct:'Carrots',       unit:'/100kg', hasIndex:true  },
+  peach:       { name:'Fersken',    emoji:'🍑', color:'#fbbf24', cat:'frukt', euProduct:'Peaches',       unit:'/100kg', hasIndex:true  },
+  blueberry:   { name:'Blåbær',     emoji:'🫐', color:'#818cf8', cat:'baer',  euProduct:'Blueberries',   unit:'/100kg', hasIndex:true  },
+  cherry:      { name:'Kirsebær',   emoji:'🍒', color:'#f43f5e', cat:'baer',  euProduct:'Cherries',      unit:'/100kg', hasIndex:true  },
+  pear:        { name:'Pære',       emoji:'🍐', color:'#a3e635', cat:'frukt', euProduct:'Pears',         unit:'/100kg', hasIndex:true  },
+  mango:       { name:'Mango',      emoji:'🥭', color:'#fcd34d', cat:'frukt', euProduct:null,            unit:'/stk',   hasIndex:false },
+  banana:      { name:'Banan',      emoji:'🍌', color:'#fef08a', cat:'frukt', euProduct:'Bananas',       unit:'/100kg', hasIndex:true  },
+  broccoli:    { name:'Brokkoli',   emoji:'🥦', color:'#16a34a', cat:'gronn', euProduct:'Broccoli',      unit:'/100kg', hasIndex:true  },
+};
+
+// Seasonal baseline estimates (€/100kg) used for fallback + forecast modelling
+const SEASONAL_BASE = {
+  avocado:     [155,158,170,165,162,180,210,220,205,185,170,160],
+  strawberry:  [480,420,350,280,240,220,350,420,480,520,550,510],
+  raspberry:   [620,600,580,520,480,450,420,460,550,600,640,630],
+  lettuce:     [68,70,65,60,58,55,60,65,70,75,78,75],
+  tomato:      [130,120,110,100,95,90,95,105,115,125,135,135],
+  apple:       [160,155,150,145,140,135,130,135,145,160,170,165],
+  orange:      [140,120,105,95,90,85,80,82,90,100,120,140],
+  pepper:      [220,190,170,150,140,130,140,160,190,210,230,230],
+  cucumber:    [58,55,52,48,45,42,44,48,52,56,60,60],
+  grape:       [350,320,300,280,260,240,230,250,280,320,360,370],
+  cauliflower: [105,100,95,88,82,78,80,85,92,100,108,108],
+  carrot:      [80,78,76,74,72,70,68,70,72,76,80,82],
+  peach:       [350,320,290,260,230,210,190,210,280,350,400,380],
+  blueberry:   [750,720,690,650,600,550,520,580,650,700,740,760],
+  cherry:      [950,900,800,700,650,600,800,950,1000,1050,1100,1050],
+  pear:        [130,125,120,115,110,105,100,105,115,125,135,135],
+  mango:       [170,165,160,155,150,155,165,175,180,180,175,172],
+  banana:      [92,92,93,91,90,88,87,88,90,92,94,93],
+  broccoli:    [110,115,120,125,130,135,140,135,125,115,108,108],
+};
+
+// ============================================================
+// STATE
+// ============================================================
+let liveData = {};          // key → { prices: [...], labels: [...], latest, weekChange, source }
+let currentProduct = 'avocado';
+let currentStage = 'Ex-packaging station price';
+let currentFilter = 'all';
+let dataLoaded = false;
+let mainChart = null;
+let compareChart = null;
+
+// ============================================================
+// WEEK HELPERS
+// ============================================================
+function getWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
+
+function currentWeek() {
+  return getWeekNumber(new Date());
+}
+
+function getCurrentYear() {
+  return new Date().getFullYear();
+}
+
+// ============================================================
+// EU AGRIDATA API CALLS
+// ============================================================
+async function fetchProductPrices(euProduct, stage, weeks = 26) {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - weeks * 7);
+
+  const fmt = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+
+  const params = new URLSearchParams({
+    products: euProduct,
+    productStages: stage,
+    beginDate: fmt(startDate),
+    endDate: fmt(endDate),
+  });
+
+  const realUrl = `https://agridata.ec.europa.eu/api/fruitAndVegetable/pricesSupplyChain?${params}`;
+  const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(realUrl)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+}
+
+function parseApiData(rawData, weeks = 26) {
+  // Filter EU average or pick most common member state
+  // Group by week/year, take EU average
+  const byWeek = {};
+  rawData.forEach(row => {
+    const key = `${row.year}-${String(row.period).padStart(2,'0')}`;
+    if (!byWeek[key]) byWeek[key] = { prices: [], year: row.year, period: row.period };
+    // Parse price string like "€155.51" or "155.51"
+    const p = parseFloat(String(row.price).replace(/[€,\s]/g, '').replace(',', '.'));
+    if (!isNaN(p) && p > 0) byWeek[key].prices.push(p);
+  });
+
+  const sorted = Object.entries(byWeek)
+    .filter(([_, v]) => v.prices.length > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-weeks);
+
+  const prices = sorted.map(([_, v]) => {
+    const avg = v.prices.reduce((a, b) => a + b, 0) / v.prices.length;
+    return Math.round(avg * 100) / 100;
+  });
+  const labels = sorted.map(([_, v]) => `Uke ${v.period} ${v.year}`);
+  return { prices, labels };
+}
+
+// ============================================================
+// GENERATE FALLBACK (simulated from seasonal baseline)
+// ============================================================
+function generateFallback(key, weeks = 26) {
+  const base = SEASONAL_BASE[key] || SEASONAL_BASE.tomato;
+  const prices = [], labels = [];
+  const now = new Date();
+  for (let i = weeks; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i * 7);
+    const b = base[d.getMonth()];
+    const noise = (Math.random() - 0.5) * b * 0.04;
+    prices.push(Math.round((b + noise) * 100) / 100);
+    labels.push(`Uke ${getWeekNumber(d)} ${d.getFullYear()}`);
+  }
+  return { prices, labels };
+}
+
+// ============================================================
+// FORECAST (simple seasonal + trend model)
+// ============================================================
+function generateForecast(key, lastPrice) {
+  const base = SEASONAL_BASE[key] || SEASONAL_BASE.tomato;
+  const now = new Date();
+  const forecast = [], low = [], high = [];
+
+  for (let i = 1; i <= 8; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + i * 7);
+    const seasonal = base[d.getMonth()];
+    const trend = seasonal / base[now.getMonth()];
+    const f = Math.round(lastPrice * trend * 100) / 100;
+    const sigma = f * 0.04;
+    forecast.push(f);
+    low.push(Math.round((f - sigma) * 100) / 100);
+    high.push(Math.round((f + sigma) * 100) / 100);
+  }
+  return { forecast, low, high };
+}
+
+// ============================================================
+// LOAD ALL DATA
+// ============================================================
+async function loadAllData() {
+  updateStatus('loading');
+  let liveCount = 0;
+  let failCount = 0;
+
+  const promises = Object.entries(PRODUCT_CONFIG).map(async ([key, cfg]) => {
+    if (!cfg.euProduct) {
+      // No EU product — use fallback
+      const fb = generateFallback(key, 26);
+      liveData[key] = { ...fb, latest: fb.prices[fb.prices.length - 1], weekChange: calcChange(fb.prices), source: 'estimert' };
+      return;
+    }
+
+    try {
+      const raw = await fetchProductPrices(cfg.euProduct, currentStage, 26);
+      if (raw && raw.length > 0) {
+        const parsed = parseApiData(raw, 26);
+        if (parsed.prices.length > 0) {
+          liveData[key] = {
+            ...parsed,
+            latest: parsed.prices[parsed.prices.length - 1],
+            weekChange: calcChange(parsed.prices),
+            source: 'live'
+          };
+          liveCount++;
+          return;
+        }
+      }
+      throw new Error('No data');
+    } catch (e) {
+      // Fallback to seasonal estimate
+      const fb = generateFallback(key, 26);
+      liveData[key] = { ...fb, latest: fb.prices[fb.prices.length - 1], weekChange: calcChange(fb.prices), source: 'estimert' };
+      failCount++;
+    }
+  });
+
+  await Promise.all(promises);
+  dataLoaded = true;
+
+  if (liveCount > 0) {
+    updateStatus('live', `${liveCount} LIVE · ${failCount} ESTIMERT`);
+    showBanner('ok', `✅ ${liveCount} produkter hentet live fra EU Agridata. ${failCount > 0 ? failCount + ' bruker sesongbasert estimat.' : ''}`);
+  } else {
+    updateStatus('fallback', 'SESONG-ESTIMAT');
+    showBanner('warn', '⚠️ Kunne ikke nå EU Agridata API direkte. Viser sesongbaserte estimater. Skyldes trolig CORS – løses med en proxy (se README).');
+  }
+
+  renderAll();
+}
+
+function calcChange(prices) {
+  if (prices.length < 2) return 0;
+  const last = prices[prices.length - 1];
+  const prev = prices[prices.length - 2];
+  return Math.round(((last - prev) / prev) * 1000) / 10;
+}
+
+// ============================================================
+// STATUS / BANNER
+// ============================================================
+function updateStatus(type, text) {
+  const el = document.getElementById('data-status');
+  el.className = 'data-status';
+  if (type === 'live') { el.classList.add('status-live'); el.textContent = text || 'LIVE DATA'; }
+  else if (type === 'loading') { el.classList.add('status-loading'); el.innerHTML = '<span class="spinner"></span>HENTER DATA'; }
+  else { el.classList.add('status-fallback'); el.textContent = text || 'ESTIMERT'; }
+
+  const now = new Date();
+  document.getElementById('week-label').textContent = `UKE ${currentWeek()} · ${now.getFullYear()}`;
+}
+
+function showBanner(type, msg) {
+  const el = document.getElementById('api-banner');
+  el.className = `api-banner ${type} show`;
+  el.innerHTML = msg;
+}
+
+// ============================================================
+// RENDER SIDEBAR
+// ============================================================
+function renderSidebar() {
+  const cats = { frukt: '🍎 Frukt', baer: '🫐 Bær', gronn: '🥬 Grønnsaker' };
+  const grouped = { frukt: [], baer: [], gronn: [] };
+  Object.entries(PRODUCT_CONFIG).forEach(([key, cfg]) => grouped[cfg.cat]?.push([key, cfg]));
+
+  let html = '';
+  Object.entries(cats).forEach(([catKey, catLabel]) => {
+    html += `<div class="cat-label">${catLabel}</div>`;
+    grouped[catKey].forEach(([key, cfg]) => {
+      const d = liveData[key];
+      const price = d ? d.latest : null;
+      const chg = d ? d.weekChange : null;
+      const source = d ? d.source : 'loading';
+      const chgClass = !chg ? 'change-neutral' : chg > 0 ? 'change-up' : 'change-down';
+      const chgText = chg !== null ? `${chg > 0 ? '+' : ''}${chg}%${chg > 0 ? '↑' : chg < 0 ? '↓' : '→'}` : '...';
+      const priceText = price !== null ? `€${price.toFixed(0)}` : '···';
+      const isActive = key === currentProduct ? ' active' : '';
+      html += `<button class="product-btn${isActive}" onclick="selectProduct('${key}',this)">
+        <div class="color-stripe" style="background:${cfg.color}"></div>
+        <span class="product-emoji">${cfg.emoji}</span>
+        <div class="product-info">
+          <div class="product-name">${cfg.name}</div>
+          <div class="product-sub">${source === 'live' ? '● LIVE' : source === 'estimert' ? '○ EST' : '··· LASTER'}</div>
+        </div>
+        <div class="product-price-col">
+          <div class="product-price" style="color:${cfg.color}">${priceText}</div>
+          <div class="product-change ${chgClass}">${chgText}</div>
+        </div>
+      </button>`;
+    });
+  });
+  document.getElementById('sidebar-products').innerHTML = html;
+}
+
+// ============================================================
+// RENDER KPI GRID
+// ============================================================
+function renderKpiGrid(filter) {
+  const now = new Date();
+  document.getElementById('kpi-subtitle').textContent =
+    `EU AGRIDATA · ${currentStage.toUpperCase().replace(' PRICE','')} · UKE ${currentWeek()}, ${now.getFullYear()}`;
+
+  const grid = document.getElementById('kpi-grid');
+  grid.innerHTML = '';
+  let i = 0;
+
+  Object.entries(PRODUCT_CONFIG).forEach(([key, cfg]) => {
+    if (filter !== 'all' && cfg.cat !== filter) return;
+    const d = liveData[key];
+    const price = d ? d.latest : null;
+    const chg = d ? d.weekChange : null;
+    const source = d ? d.source : 'loading';
+
+    const badgeCls = !chg ? 'badge-neutral' : chg > 1 ? 'badge-up' : chg < -1 ? 'badge-down' : 'badge-neutral';
+    const sign = chg > 0 ? '+' : '';
+    const chgText = chg !== null ? `${sign}${chg}% 7d` : '···';
+    const sourceBadge = source === 'live' ? '<span class="kpi-badge badge-live">EU LIVE</span>' : '<span class="kpi-badge badge-est">EST</span>';
+
+    const card = document.createElement('div');
+    card.className = `kpi-card${key === currentProduct ? ' selected' : ''}`;
+    card.style.animationDelay = (i * 0.025) + 's';
+    card.style.borderBottom = `2px solid ${cfg.color}`;
+    card.innerHTML = `
+      <div class="kpi-top">
+        <div class="kpi-label">${cfg.name}</div>
+        <div class="kpi-emoji">${cfg.emoji}</div>
+      </div>
+      <div class="kpi-price" style="color:${cfg.color}">${price !== null ? price.toFixed(0) : '···'}<span class="kpi-unit"> ${cfg.unit}</span></div>
+      <div class="kpi-meta">
+        <span class="kpi-badge ${badgeCls}">${chgText}</span>
+        ${sourceBadge}
+      </div>
+      <div class="sparkline-container"><canvas id="spark-${key}"></canvas></div>
+    `;
+    card.addEventListener('click', () => selectProduct(key, null));
+    grid.appendChild(card);
+    i++;
+
+    if (d) setTimeout(() => drawSparkline(`spark-${key}`, d.prices.slice(-10), cfg.color), 60 * i);
+  });
+}
+
+function drawSparkline(id, data, color) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  new Chart(canvas, {
+    type: 'line',
+    data: { labels: data.map((_,i) => i), datasets: [{ data, borderColor: color, borderWidth: 1.5, pointRadius: 0, tension: 0.4, fill: false }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false } } }
+  });
+}
+
+// ============================================================
+// MAIN CHART
+// ============================================================
+function buildMainChart(key, range) {
+  const cfg = PRODUCT_CONFIG[key];
+  const d = liveData[key];
+  if (!d) return;
+
+  const rangeMap = { '3m': 13, '6m': 26, '1y': 52, '3y': 156 };
+  const weeks = rangeMap[range] || 26;
+
+  // Use available data or generate for longer ranges
+  let prices, labels;
+  if (d.prices.length >= weeks) {
+    prices = d.prices.slice(-weeks - 1);
+    labels = d.labels.slice(-weeks - 1);
+  } else {
+    // Extend with fallback for longer ranges
+    const fb = generateFallback(key, weeks);
+    prices = fb.prices;
+    labels = fb.labels;
+  }
+
+  const { forecast, low, high } = generateForecast(key, prices[prices.length - 1]);
+  const now = new Date();
+  const forecastLabels = Array.from({ length: 8 }, (_, i) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + (i + 1) * 7);
+    return `Uke ${getWeekNumber(d)} ${d.getFullYear()}`;
+  });
+
+  const allLabels = [...labels, ...forecastLabels];
+  const histData = [...prices, ...Array(8).fill(null)];
+  const lastP = prices[prices.length - 1];
+  const fData = [...Array(prices.length - 1).fill(null), lastP, ...forecast];
+  const fHigh = [...Array(prices.length - 1).fill(null), lastP, ...high];
+  const fLow  = [...Array(prices.length - 1).fill(null), lastP, ...low];
+
+  const sourceLabel = d.source === 'live' ? '● EU AGRIDATA LIVE' : '○ SESONG-ESTIMAT';
+
+  document.getElementById('chart-area').innerHTML = `
+    <div class="chart-section">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">${cfg.emoji} ${cfg.name} — Prisutvikling & Prognose</div>
+          <div class="chart-subtitle">${sourceLabel} · ${currentStage.toUpperCase()} · ${cfg.unit.toUpperCase()} · INKL. 8-UKERS PROGNOSE</div>
+        </div>
+        <div class="chart-controls">
+          <button class="ctrl-btn${range==='3m'?' active':''}" onclick="setRange('3m',this)">3M</button>
+          <button class="ctrl-btn${range==='6m'?' active':''}" onclick="setRange('6m',this)">6M</button>
+          <button class="ctrl-btn${range==='1y'?' active':''}" onclick="setRange('1y',this)">1Å</button>
+          <button class="ctrl-btn${range==='3y'?' active':''}" onclick="setRange('3y',this)">3Å</button>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="main-chart"></canvas></div>
+      <div class="forecast-legend">
+        <div class="legend-item"><div class="legend-line" style="background:${cfg.color}"></div>Historisk pris</div>
+        <div class="legend-item"><div style="width:16px;height:2px;background:repeating-linear-gradient(90deg,${cfg.color} 0,${cfg.color} 3px,transparent 3px,transparent 6px)"></div>Prognose</div>
+        <div class="legend-item"><div class="legend-band" style="background:${cfg.color}"></div>Usikkerhetsintervall ±1σ</div>
+        <div style="margin-left:auto;color:var(--text3)">${d.source === 'live' ? '✅ Live EU Agridata' : '⚠️ Sesong-estimat'}</div>
+      </div>
+    </div>
+  `;
+
+  const ctx = document.getElementById('main-chart').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 250);
+  grad.addColorStop(0, cfg.color + '28');
+  grad.addColorStop(1, cfg.color + '00');
+
+  if (mainChart) mainChart.destroy();
+  mainChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: allLabels, datasets: [
+      { label: 'Historisk', data: histData, borderColor: cfg.color, borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 4, fill: true, backgroundColor: grad, tension: 0.35, order: 1 },
+      { label: 'Prognose', data: fData, borderColor: cfg.color, borderWidth: 1.8, borderDash: [6, 4], pointRadius: 0, fill: false, tension: 0.35, order: 2 },
+      { label: 'Øvre', data: fHigh, borderColor: 'transparent', pointRadius: 0, fill: '+1', backgroundColor: cfg.color + '18', tension: 0.35, order: 3 },
+      { label: 'Nedre', data: fLow, borderColor: 'transparent', pointRadius: 0, fill: false, tension: 0.35, order: 4 }
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1c2638', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+          titleColor: '#8a95aa', bodyColor: '#e8edf5',
+          titleFont: { family: 'DM Mono', size: 9 }, bodyFont: { family: 'DM Mono', size: 11 }, padding: 9,
+          callbacks: { label: c => {
+            if (c.datasetIndex === 0 && c.raw !== null) return ` Pris: €${c.raw}`;
+            if (c.datasetIndex === 1 && c.raw !== null) return ` Prognose: €${c.raw}`;
+            if (c.datasetIndex === 2 && c.raw !== null) return ` Øvre: €${c.raw}`;
+            return null;
+          }}
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#4e5a70', font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 10, maxRotation: 0 }, border: { color: 'rgba(255,255,255,0.05)' } },
+        y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#4e5a70', font: { family: 'DM Mono', size: 9 }, callback: v => '€' + v }, border: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+// ============================================================
+// DETAIL PANELS
+// ============================================================
+function buildDetailPanels(key) {
+  const cfg = PRODUCT_CONFIG[key];
+  const d = liveData[key];
+  if (!d) return;
+
+  const months = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
+  const base = SEASONAL_BASE[key] || SEASONAL_BASE.tomato;
+  const maxB = Math.max(...base), minB = Math.min(...base);
+  const curMon = new Date().getMonth();
+
+  // Seasonal
+  let seasonHtml = '<div class="season-grid">';
+  base.forEach((v, i) => {
+    const ratio = (v - minB) / (maxB - minB);
+    const h = Math.round(10 + ratio * 32);
+    const op = 0.2 + ratio * 0.75;
+    seasonHtml += `<div class="season-month"><div class="season-bar${i===curMon?' season-now':''}" style="height:${h}px;background:${cfg.color};opacity:${op}" title="${months[i]}: €${v}"></div><div class="season-label">${months[i][0]}</div></div>`;
+  });
+  seasonHtml += '</div><div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:5px">Hvit ramme = nåværende måned</div>';
+
+  // Forecast
+  const { forecast, low, high } = generateForecast(key, d.latest);
+  const fLabels = ['+2 uker', '+4 uker', '+6 uker', '+8 uker'];
+  const fIdx = [1, 3, 5, 7];
+  let forecastHtml = '<div class="forecast-row">';
+  fIdx.forEach((idx, i) => {
+    const p = forecast[idx];
+    const chg = (((p - d.latest) / d.latest) * 100).toFixed(1);
+    const dir = parseFloat(chg) >= 0 ? '↑' : '↓';
+    const cls = parseFloat(chg) >= 0 ? 'change-up' : 'change-down';
+    forecastHtml += `<div class="forecast-item">
+      <div class="forecast-period">${fLabels[i]}</div>
+      <div class="forecast-price" style="color:${cfg.color}">€${p.toFixed(0)}</div>
+      <div class="forecast-dir ${cls}">${dir}${Math.abs(chg)}%</div>
+      <div class="forecast-conf">±€${((high[idx]-low[idx])/2).toFixed(0)}</div>
+    </div>`;
+  });
+  forecastHtml += '</div>';
+
+  // Country heatmap (estimated differentials — real data would require per-country API call)
+  const countryDiff = { DE: 1.02, NL: 0.97, FR: 1.06, ES: 0.91 };
+  const countryPrices = Object.entries(countryDiff).map(([c, mult]) => [c, Math.round(d.latest * mult)]);
+  const vals = countryPrices.map(([, v]) => v);
+  const mn = Math.min(...vals), mx = Math.max(...vals);
+  let hmHtml = '<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Estimert engros per land</div>';
+  hmHtml += '<div class="heatmap-grid"><div class="heatmap-cell heatmap-header"></div>';
+  countryPrices.forEach(([c]) => { hmHtml += `<div class="heatmap-cell heatmap-header">${c}</div>`; });
+  hmHtml += '<div class="heatmap-row-label">€/100kg</div>';
+  countryPrices.forEach(([, v]) => {
+    const r = (v - mn) / (mx - mn + 0.01);
+    const hc = r < 0.25 ? 'heat-vl' : r < 0.5 ? 'heat-l' : r < 0.75 ? 'heat-h' : 'heat-vh';
+    hmHtml += `<div class="heatmap-cell ${hc}">€${v}</div>`;
+  });
+  hmHtml += '</div>';
+
+  // News stubs (product-specific)
+  const NEWS = {
+    avocado:    [{h:'Marokko sesong sluttfase – Peru tar over',i:'down'},{h:'Fraktrater Middelhavet +8% presser kostnader',i:'up'}],
+    strawberry: [{h:'Huelva-volum +12% mot fjorår – prispress ned',i:'down'},{h:'Kulde Sør-Spania uke 6–7 – forsyningsrisiko',i:'up'}],
+    raspberry:  [{h:'Marokko 89% av EU-import bringebær/bjørnebær',i:'neutral'},{h:'Import fra utviklingsland doblet siden 2020',i:'up'}],
+    lettuce:    [{h:'Murcia normal avling – stabil forsyning',i:'neutral'},{h:'NL veksthus energi +3,1% – produksjonskostnader',i:'up'}],
+    tomato:     [{h:'Marokko og Almería leverer godt til EU',i:'down'},{h:'NL kassetomater øker gradvis fra februar',i:'down'}],
+    apple:      [{h:'Europeiske lager godt fylt etter god 2025-høst',i:'down'},{h:'Cosmic Crisp og Samboa nye BAMA-favoritter',i:'neutral'}],
+    orange:     [{h:'Valencia full produksjon etter 2024-flom gjenoppbygging',i:'down'},{h:'Klementinsesong sterk – Clemenules og Orries',i:'down'}],
+    pepper:     [{h:'Hellas økte leveranser kraftig fra 2023',i:'down'},{h:'Corno-paprika ny BAMA-favoritt for 2025–26',i:'neutral'}],
+    cucumber:   [{h:'Almería normal produksjon – god EU-forsyning',i:'neutral'},{h:'NL agurk begrenset av høye energipriser',i:'up'}],
+    grape:      [{h:'Sør-Afrika Cotton Candy topper norsk salg',i:'up'},{h:'Spansk sommersesong normaliserer priser juni',i:'down'}],
+    cauliflower:[{h:'Frankrike-volum normalt, ingen forstyrrelser',i:'neutral'},{h:'Bukettblomkål ny BAMA-sort i vekst',i:'neutral'}],
+    carrot:     [{h:'NL lagerkarrot i god stand',i:'neutral'},{h:'Norsk gulrotsesong starter sommer 2026',i:'neutral'}],
+    peach:      [{h:'Utenfor sesong – få europeiske fersken nå',i:'neutral'},{h:'Sesongen starter juni–juli Sør-Europa',i:'down'}],
+    blueberry:  [{h:'Peru blåbær dominerer vinterimporten til EU',i:'up'},{h:'Global etterspørsel på rekordnivå',i:'up'}],
+    cherry:     [{h:'Utenfor sesong – tyrkisk/søramerikansk import',i:'neutral'},{h:'Sesongtopp forventes juni–juli fra Spania',i:'down'}],
+    pear:       [{h:'Conference-lager Nederland godt fylt',i:'down'},{h:'Eksotiske pæresorter øker i popularitet',i:'neutral'}],
+    mango:      [{h:'Peruansk sesong – god tilgang til EU',i:'down'},{h:'Ingen full EU-indeks for mango – estimert',i:'neutral'}],
+    banana:     [{h:'Ecuadoriansk produksjon stabil, ingen forstyrrelser',i:'neutral'},{h:'EUR/USD-svakhet reduserer importfordel',i:'up'}],
+    broccoli:   [{h:'Frostperiode spanske produksjonsregioner jan–feb',i:'up'},{h:'Brokkolini 1500% vekst siden 2020 hos BAMA',i:'neutral'}],
+  };
+  const news = [...(NEWS[key] || []), {h:'EUR/USD 1.048 – presser importkostnader',i:'up'},{h:'FAO Food Price Index 127.4 – fjerde md på rad',i:'up'}].slice(0,5);
+  let newsHtml = news.map(n => {
+    const col = n.i==='up'?'#f87171':n.i==='down'?'#4ade80':'#fbbf24';
+    const lbl = n.i==='up'?'↑ pris':n.i==='down'?'↓ pris':'→ stabilt';
+    return `<div class="news-item"><div class="news-dot" style="background:${cfg.color}"></div><div class="news-body"><div class="news-headline">${n.h}</div><div class="news-meta"><span style="color:${col}">${lbl}</span></div></div></div>`;
+  }).join('');
+
+  document.getElementById('detail-panels').innerHTML = `
+    <div class="panel-card">
+      <div class="panel-title"><div class="panel-icon" style="background:rgba(251,191,36,0.12)">📅</div>Sesongindeks</div>
+      ${seasonHtml}
+    </div>
+    <div class="panel-card">
+      <div class="panel-title"><div class="panel-icon" style="background:rgba(59,130,246,0.12)">🔮</div>Prognose — 8 uker</div>
+      ${forecastHtml}
+      ${hmHtml}
+    </div>
+    <div class="panel-card">
+      <div class="panel-title"><div class="panel-icon" style="background:rgba(232,121,249,0.12)">📰</div>Markedsnyheter</div>
+      ${newsHtml}
+    </div>
+    <div class="panel-card">
+      <div class="panel-title"><div class="panel-icon" style="background:rgba(74,222,128,0.12)">ℹ️</div>Produktinfo</div>
+      <div>
+        <div class="info-row"><span class="info-key">PRODUKT</span><span style="font-weight:600;color:${cfg.color}">${cfg.emoji} ${cfg.name}</span></div>
+        <div class="info-row"><span class="info-key">EU PRODUKT-ID</span><span style="font-family:'DM Mono',monospace;font-size:11px">${cfg.euProduct || 'Ikke tilgjengelig'}</span></div>
+        <div class="info-row"><span class="info-key">PRISNIVÅ</span><span style="font-family:'DM Mono',monospace">€${d.latest.toFixed(0)} ${cfg.unit}</span></div>
+        <div class="info-row"><span class="info-key">UKENTLIG ENDRING</span><span style="font-family:'DM Mono',monospace;color:${d.weekChange>0?'var(--up)':d.weekChange<0?'var(--down)':'var(--neutral)'}">${d.weekChange>0?'+':''}${d.weekChange}%</span></div>
+        <div class="info-row"><span class="info-key">DATAKILDE</span><span style="color:${d.source==='live'?'var(--up)':'var(--neutral)'}">${d.source==='live'?'✅ EU Agridata Live':'⚠️ Sesong-estimat'}</span></div>
+        <div class="info-row"><span class="info-key">PRISSTEG</span><span style="font-family:'DM Mono',monospace;font-size:10px">${currentStage}</span></div>
+        <div class="info-row"><span class="info-key">KATEGORI</span><span>${cfg.cat==='frukt'?'🍎 Frukt':cfg.cat==='baer'?'🫐 Bær':'🥬 Grønnsaker'}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
+// COMPARE CHART
+// ============================================================
+function buildCompareChart() {
+  const ctx = document.getElementById('compare-chart').getContext('2d');
+  const entries = Object.entries(PRODUCT_CONFIG);
+  const changes = entries.map(([key]) => liveData[key]?.weekChange ?? 0);
+  if (compareChart) compareChart.destroy();
+  compareChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: entries.map(([, cfg]) => `${cfg.emoji} ${cfg.name}`),
+      datasets: [{ data: changes, backgroundColor: entries.map(([, cfg]) => cfg.color + '99'), borderColor: entries.map(([, cfg]) => cfg.color), borderWidth: 1.5, borderRadius: 5 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: '#1c2638', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, titleColor: '#8a95aa', bodyColor: '#e8edf5', titleFont: { family: 'DM Mono', size: 9 }, bodyFont: { family: 'DM Mono', size: 11 }, padding: 8, callbacks: { label: c => ` ${c.raw > 0 ? '+' : ''}${c.raw}% siste uke` } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#8a95aa', font: { family: 'DM Sans', size: 9 }, maxRotation: 40 }, border: { color: 'rgba(255,255,255,0.05)' } },
+        y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#4e5a70', font: { family: 'DM Mono', size: 9 }, callback: v => v + '%' }, border: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+// ============================================================
+// INTERACTIONS
+// ============================================================
+function selectProduct(key, btn) {
+  currentProduct = key;
+  renderSidebar();
+  renderKpiGrid(currentFilter);
+  buildMainChart(key, '6m');
+  buildDetailPanels(key);
+}
+
+function filterCat(cat, btn) {
+  currentFilter = cat;
+  document.querySelectorAll('.filter-row .filter-btn').forEach(b => {
+    if (['all','frukt','baer','gronn'].includes(b.getAttribute('onclick')?.match(/'(\w+)'/)?.[1])) b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  renderKpiGrid(cat);
+}
+
+function setStage(stage, btn) {
+  currentStage = stage;
+  document.querySelectorAll('#stage-row .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  liveData = {};  // clear cache
+  loadAllData();
+}
+
+function setRange(range, btn) {
+  document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildMainChart(currentProduct, range);
+}
+
+// ============================================================
+// RENDER ALL
+// ============================================================
+function renderAll() {
+  renderSidebar();
+  renderKpiGrid(currentFilter);
+  buildMainChart(currentProduct, '6m');
+  buildDetailPanels(currentProduct);
+  buildCompareChart();
+}
+
+// ============================================================
+// START
+// ============================================================
+window.addEventListener('load', () => {
+  renderSidebar();  // Show skeleton immediately
+  loadAllData();    // Then fetch live data
+});
+</script>
+</body>
+</html>
