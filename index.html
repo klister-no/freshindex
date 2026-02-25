@@ -229,17 +229,21 @@
     <span style="margin-left:auto">Alle priser i €/100kg eller €/enhet</span>
   </div>
 
-  <!-- PRICE STAGE SELECTOR -->
-  <div class="filter-row" id="stage-row">
-    <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;align-self:center">PRISNIVÅ:</span>
-    <button class="filter-btn active" onclick="setStage('Ex-packaging station price',this)">Ex-packaging</button>
-    <button class="filter-btn" onclick="setStage('Farmgate price',this)">Farmgate</button>
-    <button class="filter-btn" onclick="setStage('Retail buying price',this)">Retail</button>
-    <span style="margin-left:auto;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;align-self:center">FILTER:</span>
-    <button class="filter-btn active" onclick="filterCat('all',this)">Alle</button>
-    <button class="filter-btn" onclick="filterCat('frukt',this)">🍎 Frukt</button>
-    <button class="filter-btn" onclick="filterCat('baer',this)">🫐 Bær</button>
-    <button class="filter-btn" onclick="filterCat('gronn',this)">🥬 Grønnsaker</button>
+  <!-- PRISNIVÅ OG FILTER -->
+  <div style="display:flex;gap:18px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+    <div style="display:flex;gap:5px;align-items:center" id="stage-row">
+      <span style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace">PRISNIVÅ:</span>
+      <button class="filter-btn active" onclick="setStage('Ex-packaging station price',this)">Ex-packaging</button>
+      <button class="filter-btn" onclick="setStage('Farmgate price',this)">Farmgate</button>
+      <button class="filter-btn" onclick="setStage('Retail buying price',this)">Retail</button>
+    </div>
+    <div style="display:flex;gap:5px;align-items:center" id="cat-row">
+      <span style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace">FILTER:</span>
+      <button class="filter-btn active" onclick="filterCat('all',this)">Alle</button>
+      <button class="filter-btn" onclick="filterCat('frukt',this)">🍎 Frukt</button>
+      <button class="filter-btn" onclick="filterCat('baer',this)">🫐 Bær</button>
+      <button class="filter-btn" onclick="filterCat('gronn',this)">🥬 Grønnsaker</button>
+    </div>
   </div>
 
   <!-- KPI GRID -->
@@ -348,8 +352,35 @@ function getCurrentYear() {
 }
 
 // ============================================================
-// EU AGRIDATA API CALLS
+// EU AGRIDATA API CALLS — med proxy-kjede for pålitelighet
 // ============================================================
+
+// Prøver disse proxiene i rekkefølge til én fungerer
+const PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+];
+
+async function fetchWithProxyChain(targetUrl) {
+  for (const proxyFn of PROXIES) {
+    try {
+      const proxyUrl = proxyFn(targetUrl);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout per proxy
+      const res = await fetch(proxyUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && !data.error) return data;
+      }
+    } catch (e) {
+      // prøv neste proxy
+    }
+  }
+  throw new Error('Alle proxier feilet');
+}
+
 async function fetchProductPrices(euProduct, stage, weeks = 26) {
   const endDate = new Date();
   const startDate = new Date();
@@ -364,11 +395,8 @@ async function fetchProductPrices(euProduct, stage, weeks = 26) {
     endDate: fmt(endDate),
   });
 
-  const realUrl = `https://agridata.ec.europa.eu/api/fruitAndVegetable/pricesSupplyChain?${params}`;
-  const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(realUrl)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return await res.json();
+  const targetUrl = `https://agridata.ec.europa.eu/api/fruitAndVegetable/pricesSupplyChain?${params}`;
+  return await fetchWithProxyChain(targetUrl);
 }
 
 function parseApiData(rawData, weeks = 26) {
@@ -444,19 +472,25 @@ async function loadAllData() {
   let liveCount = 0;
   let failCount = 0;
 
+  // STEG 1: Fyll alle produkter med sesongbasert estimat umiddelbart
+  // → dashboardet vises med en gang, ingen blank skjerm
+  Object.entries(PRODUCT_CONFIG).forEach(([key]) => {
+    const fb = generateFallback(key, 26);
+    liveData[key] = { ...fb, latest: fb.prices[fb.prices.length - 1], weekChange: calcChange(fb.prices), source: 'estimert' };
+  });
+  dataLoaded = true;
+  renderAll(); // Vis straks med estimater
+
+  // STEG 2: Prøv å hente ekte data fra EU Agridata for hvert produkt
+  // Oppdaterer hvert produkt individuelt når det ankommer
   const promises = Object.entries(PRODUCT_CONFIG).map(async ([key, cfg]) => {
-    if (!cfg.euProduct) {
-      // No EU product — use fallback
-      const fb = generateFallback(key, 26);
-      liveData[key] = { ...fb, latest: fb.prices[fb.prices.length - 1], weekChange: calcChange(fb.prices), source: 'estimert' };
-      return;
-    }
+    if (!cfg.euProduct) return; // Ingen EU-produkt (f.eks. mango)
 
     try {
       const raw = await fetchProductPrices(cfg.euProduct, currentStage, 26);
-      if (raw && raw.length > 0) {
+      if (raw && Array.isArray(raw) && raw.length > 0) {
         const parsed = parseApiData(raw, 26);
-        if (parsed.prices.length > 0) {
+        if (parsed.prices.length > 2) {
           liveData[key] = {
             ...parsed,
             latest: parsed.prices[parsed.prices.length - 1],
@@ -464,30 +498,32 @@ async function loadAllData() {
             source: 'live'
           };
           liveCount++;
-          return;
+          // Oppdater UI for dette produktet umiddelbart
+          renderSidebar();
+          renderKpiGrid(currentFilter);
+          if (key === currentProduct) {
+            buildMainChart(currentProduct, '6m');
+            buildDetailPanels(currentProduct);
+          }
         }
       }
-      throw new Error('No data');
     } catch (e) {
-      // Fallback to seasonal estimate
-      const fb = generateFallback(key, 26);
-      liveData[key] = { ...fb, latest: fb.prices[fb.prices.length - 1], weekChange: calcChange(fb.prices), source: 'estimert' };
-      failCount++;
+      failCount++; // Beholder estimert
     }
   });
 
   await Promise.all(promises);
-  dataLoaded = true;
 
+  // STEG 3: Vis endelig status
   if (liveCount > 0) {
-    updateStatus('live', `${liveCount} LIVE · ${failCount} ESTIMERT`);
-    showBanner('ok', `✅ ${liveCount} produkter hentet live fra EU Agridata. ${failCount > 0 ? failCount + ' bruker sesongbasert estimat.' : ''}`);
+    updateStatus('live', `${liveCount} LIVE · ${Object.keys(PRODUCT_CONFIG).length - liveCount} EST`);
+    showBanner('ok', `✅ ${liveCount} produkter oppdatert med live-priser fra EU Agridata (ex-packaging). ${Object.keys(PRODUCT_CONFIG).length - liveCount} bruker sesongbaserte estimater.`);
   } else {
     updateStatus('fallback', 'SESONG-ESTIMAT');
-    showBanner('warn', '⚠️ Kunne ikke nå EU Agridata API direkte. Viser sesongbaserte estimater. Skyldes trolig CORS – løses med en proxy (se README).');
+    showBanner('warn', '⚠️ EU Agridata API ikke tilgjengelig akkurat nå (CORS/proxy-feil). Alle priser er sesongbaserte estimater — rimelige ballparktall, men ikke ekte markedspriser. Data oppdateres automatisk når API er tilgjengelig.');
   }
 
-  renderAll();
+  buildCompareChart();
 }
 
 function calcChange(prices) {
@@ -872,9 +908,7 @@ function selectProduct(key, btn) {
 
 function filterCat(cat, btn) {
   currentFilter = cat;
-  document.querySelectorAll('.filter-row .filter-btn').forEach(b => {
-    if (['all','frukt','baer','gronn'].includes(b.getAttribute('onclick')?.match(/'(\w+)'/)?.[1])) b.classList.remove('active');
-  });
+  document.querySelectorAll('#cat-row .filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderKpiGrid(cat);
 }
@@ -908,8 +942,7 @@ function renderAll() {
 // START
 // ============================================================
 window.addEventListener('load', () => {
-  renderSidebar();  // Show skeleton immediately
-  loadAllData();    // Then fetch live data
+  loadAllData(); // Viser estimater umiddelbart, oppdaterer med live data
 });
 </script>
 </body>
