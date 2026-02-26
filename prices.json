@@ -1,0 +1,29 @@
+{
+  "fetched": "2026-02-26T03:08:14.246989Z",
+  "week": 9,
+  "year": 2026,
+  "stage": "Ex-packaging station price",
+  "products": {},
+  "errors": [
+    "avocado: HTTP Error 404: Not Found",
+    "strawberry: HTTP Error 404: Not Found",
+    "raspberry: HTTP Error 404: Not Found",
+    "banana: HTTP Error 404: Not Found",
+    "tomato: HTTP Error 404: Not Found",
+    "apple: HTTP Error 404: Not Found",
+    "orange: HTTP Error 404: Not Found",
+    "pepper: HTTP Error 404: Not Found",
+    "cucumber: HTTP Error 404: Not Found",
+    "lettuce: HTTP Error 404: Not Found",
+    "grape: HTTP Error 404: Not Found",
+    "cauliflower: HTTP Error 404: Not Found",
+    "carrot: HTTP Error 404: Not Found",
+    "blueberry: HTTP Error 404: Not Found",
+    "cherry: HTTP Error 404: Not Found",
+    "pear: HTTP Error 404: Not Found",
+    "broccoli: HTTP Error 404: Not Found",
+    "peach: HTTP Error 404: Not Found"
+  ],
+  "liveCount": 0,
+  "totalCount": 18
+}
