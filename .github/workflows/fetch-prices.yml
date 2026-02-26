@@ -1,0 +1,143 @@
+name: Fetch EU Agridata Weekly
+
+on:
+  schedule:
+    - cron: '0 8 * * 5'  # Fredag kl 08:00 UTC (EU Agridata oppdateres fredager)
+  workflow_dispatch:       # Kan også kjøres manuelt fra GitHub
+
+jobs:
+  fetch-prices:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch EU Agridata prices
+        run: |
+          python3 << 'PYEOF'
+          import urllib.request
+          import json
+          import datetime
+          import time
+
+          PRODUCTS = {
+            "avocado":     "Avocados",
+            "strawberry":  "Strawberries",
+            "raspberry":   "Raspberries",
+            "banana":      "Bananas",
+            "tomato":      "Tomatoes",
+            "apple":       "Apples",
+            "orange":      "Oranges",
+            "pepper":      "Sweet peppers",
+            "cucumber":    "Cucumbers",
+            "lettuce":     "Lettuces",
+            "grape":       "Table grapes",
+            "cauliflower": "Cauliflowers",
+            "carrot":      "Carrots",
+            "blueberry":   "Blueberries",
+            "cherry":      "Cherries",
+            "pear":        "Pears",
+            "broccoli":    "Broccoli",
+            "peach":       "Peaches",
+          }
+
+          STAGE = "Ex-packaging station price"
+          
+          end = datetime.date.today()
+          start = end - datetime.timedelta(weeks=52)
+          
+          def fmt(d):
+            return d.strftime("%d/%m/%Y")
+
+          results = {}
+          errors = []
+
+          for key, product in PRODUCTS.items():
+            try:
+              params = f"products={urllib.parse.quote(product)}&productStages={urllib.parse.quote(STAGE)}&beginDate={fmt(start)}&endDate={fmt(end)}"
+              url = f"https://agridata.ec.europa.eu/api/fruitAndVegetable/pricesSupplyChain?{params}"
+              
+              req = urllib.request.Request(url, headers={
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 (compatible; BAMA-FreshIndex/1.0)"
+              })
+              
+              with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+              
+              if not data:
+                errors.append(f"{key}: empty response")
+                continue
+
+              # Grupper per uke
+              by_week = {}
+              for row in data:
+                wkey = f"{row['year']}-{str(row['period']).zfill(2)}"
+                if wkey not in by_week:
+                  by_week[wkey] = {"prices": [], "year": row["year"], "period": row["period"]}
+                try:
+                  p = float(str(row["price"]).replace(",", ".").replace("€", "").strip())
+                  if p > 0:
+                    by_week[wkey]["prices"].append(p)
+                except:
+                  pass
+
+              sorted_weeks = sorted(by_week.items())
+              prices = []
+              labels = []
+              for wk, v in sorted_weeks:
+                if v["prices"]:
+                  avg = sum(v["prices"]) / len(v["prices"])
+                  prices.append(round(avg, 2))
+                  labels.append(f"Uke {v['period']} {v['year']}")
+
+              if len(prices) >= 2:
+                latest = prices[-1]
+                prev = prices[-2]
+                week_change = round(((latest - prev) / prev) * 100, 1)
+                results[key] = {
+                  "prices": prices,
+                  "labels": labels,
+                  "latest": latest,
+                  "weekChange": week_change,
+                  "source": "live"
+                }
+                print(f"✅ {key}: €{latest:.2f} ({week_change:+.1f}%)")
+              else:
+                errors.append(f"{key}: not enough data points")
+
+              time.sleep(0.5)  # Ikke spam API-et
+
+            except Exception as e:
+              errors.append(f"{key}: {str(e)}")
+              print(f"❌ {key}: {e}")
+
+          import urllib.parse
+
+          output = {
+            "fetched": datetime.datetime.utcnow().isoformat() + "Z",
+            "week": datetime.date.today().isocalendar()[1],
+            "year": datetime.date.today().year,
+            "stage": STAGE,
+            "products": results,
+            "errors": errors,
+            "liveCount": len(results),
+            "totalCount": len(PRODUCTS)
+          }
+
+          with open("prices.json", "w") as f:
+            json.dump(output, f, indent=2)
+
+          print(f"\n✅ Ferdig: {len(results)}/{len(PRODUCTS)} produkter hentet")
+          if errors:
+            print(f"⚠️  Feil: {errors}")
+          PYEOF
+
+      - name: Commit and push prices.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prices.json
+          git diff --staged --quiet || git commit -m "📊 Ukentlig prisoppdatering uke $(date +%V) $(date +%Y)"
+          git push
