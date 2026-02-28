@@ -1,0 +1,216 @@
+name: Fetch UK DEFRA Fruit & Veg Prices
+
+on:
+  schedule:
+    - cron: '0 10 * * 2'  # Tirsdag kl 10:00 UTC (UK DEFRA oppdaterer mandag/tirsdag)
+  workflow_dispatch:       # Manuell kjøring fra GitHub
+
+jobs:
+  fetch-prices:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch UK DEFRA prices and convert to prices.json
+        run: |
+          python3 << 'PYEOF'
+          import urllib.request
+          import urllib.parse
+          import csv
+          import json
+          import datetime
+          import io
+
+          # -------------------------------------------------------
+          # 1. Finn siste CSV-URL fra gov.uk
+          # -------------------------------------------------------
+          # Gov.uk bytter filnavn hver uke (fruitvegprices-YYMMDD.csv)
+          # Vi henter indekssiden og finner siste lenke
+
+          INDEX_URL = "https://www.gov.uk/government/statistical-data-sets/wholesale-fruit-and-vegetable-prices-weekly-average"
+
+          try:
+            req = urllib.request.Request(INDEX_URL, headers={
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            })
+            with urllib.request.urlopen(req, timeout=20) as resp:
+              html = resp.read().decode("utf-8", errors="ignore")
+
+            # Finn siste CSV-lenke
+            import re
+            matches = re.findall(r'href="(https://assets\.publishing\.service\.gov\.uk[^"]+fruitvegprices[^"]+\.csv)"', html)
+            if not matches:
+              # Prøv relativ lenke
+              matches = re.findall(r'href="(/media/[^"]+fruitvegprices[^"]+\.csv)"', html)
+              matches = ["https://assets.publishing.service.gov.uk" + m for m in matches]
+
+            if matches:
+              csv_url = matches[-1]  # Siste = nyeste
+              print(f"Fant CSV: {csv_url}")
+            else:
+              raise Exception("Fant ingen CSV-lenke på gov.uk-siden")
+
+          except Exception as e:
+            print(f"Kunne ikke hente indeksside: {e}")
+            # Fallback: bruk kjent URL-mønster med dagens dato
+            today = datetime.date.today()
+            date_str = today.strftime("%y%m%d")
+            csv_url = f"https://assets.publishing.service.gov.uk/media/698efb59492ea446ea7f4377/fruitvegprices-{date_str}.csv"
+            print(f"Prøver fallback URL: {csv_url}")
+
+          # -------------------------------------------------------
+          # 2. Last ned CSV
+          # -------------------------------------------------------
+          req = urllib.request.Request(csv_url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          })
+          with urllib.request.urlopen(req, timeout=20) as resp:
+            raw_csv = resp.read().decode("utf-8", errors="ignore")
+
+          print(f"Hentet {len(raw_csv)} tegn fra {csv_url}")
+
+          # -------------------------------------------------------
+          # 3. Hent GBP/EUR-kurs fra frankfurter.app
+          # -------------------------------------------------------
+          try:
+            fx_req = urllib.request.Request(
+              "https://api.frankfurter.app/latest?from=GBP&to=EUR",
+              headers={"User-Agent": "BAMA-FreshIndex/1.0"}
+            )
+            with urllib.request.urlopen(fx_req, timeout=10) as fx_resp:
+              fx_data = json.loads(fx_resp.read())
+              gbp_eur = fx_data["rates"]["EUR"]
+              print(f"GBP/EUR kurs: {gbp_eur}")
+          except Exception as e:
+            gbp_eur = 1.18  # Fallback
+            print(f"FX-feil, bruker fallback {gbp_eur}: {e}")
+
+          # -------------------------------------------------------
+          # 4. Map UK DEFRA produktnavn → BAMA FreshIndex nøkler
+          # -------------------------------------------------------
+          # UK-data er i GBP/kg — vi konverterer til EUR/100kg for konsistens
+          PRODUCT_MAP = {
+            "apples":       "apple",
+            "pears":        "pear",
+            "strawberries": "strawberry",
+            "raspberries":  "raspberry",
+            "blueberries":  "blueberry",
+            "cherries":     "cherry",
+            "plums":        "peach",       # Nærmeste match
+            "tomatoes":     "tomato",
+            "cucumbers":    "cucumber",
+            "capsicum":     "pepper",      # Capsicum = paprika
+            "cauliflower":  "cauliflower",
+            "carrots":      "carrot",
+            "lettuce":      "lettuce",
+            "calabrese":    "broccoli",    # Calabrese = broccoli
+            "beans":        "broccoli",    # Fallback
+          }
+
+          # -------------------------------------------------------
+          # 5. Parse CSV og grupper per produkt
+          # -------------------------------------------------------
+          reader = csv.DictReader(io.StringIO(raw_csv))
+          
+          # Samle alle rader per BAMA-nøkkel og dato
+          by_product_date = {}  # {bama_key: {date: [prices_gbp_kg]}}
+
+          for row in reader:
+            item = row.get("item", "").strip().lower()
+            bama_key = PRODUCT_MAP.get(item)
+            if not bama_key:
+              continue
+
+            try:
+              price_gbp = float(row["price"])
+              unit = row.get("unit", "kg").strip()
+              date_str = row.get("date", "").strip()
+
+              # Kun kg-priser (hopp over head, bunch, stem, twin osv.)
+              if unit != "kg":
+                continue
+
+              if bama_key not in by_product_date:
+                by_product_date[bama_key] = {}
+              if date_str not in by_product_date[bama_key]:
+                by_product_date[bama_key][date_str] = []
+              by_product_date[bama_key][date_str].append(price_gbp)
+
+            except (ValueError, KeyError):
+              continue
+
+          # -------------------------------------------------------
+          # 6. Bygg tidsserie per produkt
+          # -------------------------------------------------------
+          results = {}
+
+          for bama_key, date_map in by_product_date.items():
+            sorted_dates = sorted(date_map.items())  # Kronologisk
+            prices_eur_100kg = []
+            labels = []
+
+            for date_str, gbp_prices in sorted_dates:
+              avg_gbp = sum(gbp_prices) / len(gbp_prices)
+              # GBP/kg → EUR/100kg
+              eur_100kg = round(avg_gbp * gbp_eur * 100, 2)
+              prices_eur_100kg.append(eur_100kg)
+
+              # Lag ukelabel
+              try:
+                d = datetime.date.fromisoformat(date_str)
+                week = d.isocalendar()[1]
+                labels.append(f"Uke {week} {d.year}")
+              except:
+                labels.append(date_str)
+
+            if len(prices_eur_100kg) >= 2:
+              latest = prices_eur_100kg[-1]
+              prev = prices_eur_100kg[-2]
+              week_change = round(((latest - prev) / prev) * 100, 1)
+
+              results[bama_key] = {
+                "prices": prices_eur_100kg,
+                "labels": labels,
+                "latest": latest,
+                "weekChange": week_change,
+                "source": "live",
+                "sourceNote": f"UK DEFRA grossistpriser (GBP/kg × {gbp_eur:.4f} = EUR/100kg)"
+              }
+              print(f"  ✅ {bama_key}: €{latest/100:.2f}/kg ({week_change:+.1f}%)")
+            else:
+              print(f"  ⚠️  {bama_key}: for få datapunkter")
+
+          # -------------------------------------------------------
+          # 7. Lagre prices.json
+          # -------------------------------------------------------
+          output = {
+            "fetched": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "week": datetime.date.today().isocalendar()[1],
+            "year": datetime.date.today().year,
+            "source": "UK DEFRA Wholesale Fruit & Vegetable Prices",
+            "sourceUrl": csv_url,
+            "gbpEurRate": gbp_eur,
+            "stage": "Wholesale (grossist)",
+            "products": results,
+            "liveCount": len(results),
+            "totalCount": len(PRODUCT_MAP)
+          }
+
+          with open("prices.json", "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+
+          print(f"\n✅ Ferdig: {len(results)} produkter lagret i prices.json")
+          PYEOF
+
+      - name: Commit and push prices.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prices.json
+          git diff --staged --quiet || git commit -m "📊 Prisoppdatering uke $(date +%V) $(date +%Y) — UK DEFRA"
+          git push
