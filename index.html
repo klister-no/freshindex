@@ -55,6 +55,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
 .product-info{flex:1;min-width:0;}
 .product-name{font-size:11px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .product-sub{font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;}
+.product-sub-live{font-size:9px;font-family:'DM Mono',monospace;color:#4ade80;}
+.product-sub-csv{font-size:9px;font-family:'DM Mono',monospace;color:#60a5fa;}
 .product-price-col{text-align:right;flex-shrink:0;}
 .product-price{font-size:11px;font-weight:600;font-family:'DM Mono',monospace;}
 .product-change{font-size:9px;font-family:'DM Mono',monospace;}
@@ -323,7 +325,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
 
 
 </div>
-</div>
 
 <!-- ==================== TAB: CSV/DATA OPPLASTING ==================== -->
 <div class="tab-panel" id="tab-pdf">
@@ -396,6 +397,57 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
     <div style="margin-top:20px">
       <div style="font-family:'DM Serif Display',serif;font-size:15px;margin-bottom:8px">Rå CSV-data (første 5 rader)</div>
       <div id="csv-raw-preview" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);overflow-x:auto;white-space:pre;line-height:1.7"></div>
+    </div>
+  </div>
+
+  <!-- ANDRE DATAKILDER -->
+  <div style="margin-top:24px">
+    <div class="driver-section-title">Andre tilgjengelige datakilder</div>
+    <div class="driver-section-sub">ÅPNE KILDER SOM KAN LASTES OPP SOM CSV · Ingen IP-blokkering · Gratis tilgang</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px">
+      
+      <div class="panel-card" style="border-left:3px solid #4ade80">
+        <div class="panel-title">🇬🇧 UK DEFRA</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.7">Ukentlig CSV med grossistpriser for frukt/grønt. Dekker 12 av våre produkter. Oppdateres tirsdager.<br>
+        <span style="color:var(--text3)">Dekning: eple, pære, jordbær, bringebær, blåbær, kirsebær, tomat, agurk, paprika, gulrot, brokkoli, blomkål</span></div>
+        <a href="https://www.gov.uk/government/statistical-data-sets/wholesale-fruit-and-vegetable-prices-weekly-average" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;font-family:'DM Mono',monospace;color:#60a5fa">→ Last ned fra gov.uk</a>
+      </div>
+
+      <div class="panel-card" style="border-left:3px solid #60a5fa">
+        <div class="panel-title">🇪🇺 EU Agridata (manuell)</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.7">EU Agridata blokkerer automatisk henting, men CSV-eksport fungerer fra nettleseren. Velg produkt → eksporter ukentlige priser.<br>
+        <span style="color:var(--text3)">Dekning: alle 19 produkter · Prisnivå: ex-packaging, farmgate, retail</span></div>
+        <a href="https://agridata.ec.europa.eu/extensions/DashboardFruitsVegetables/FruitsVegetablesMarkets.html" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;font-family:'DM Mono',monospace;color:#60a5fa">→ Åpne EU Agridata</a>
+      </div>
+
+      <div class="panel-card" style="border-left:3px solid #fb923c">
+        <div class="panel-title">🇩🇪 AMI Marktbericht (DE)</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.7">Tysk Agrarmarkt Informations-Gesellschaft. Ukentlige markedsrapporter for frukt/grønt. Gratis registrering kreves.<br>
+        <span style="color:var(--text3)">Dekning: tomat, agurk, paprika, eple, salat — tyske grossistmarkeder</span></div>
+        <a href="https://www.ami-informiert.de" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;font-family:'DM Mono',monospace;color:#60a5fa">→ ami-informiert.de</a>
+      </div>
+
+      <div class="panel-card" style="border-left:3px solid #fbbf24">
+        <div class="panel-title">🇳🇱 CBS / NFO (NL)</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.7">Nederlandsk CBS statistik og NFO (Nederlandse Fruit en Groente Organisatie) publiserer auksjonsdata. Spesielt relevant for veksthusprodukter.<br>
+        <span style="color:var(--text3)">Dekning: tomat, agurk, paprika, salat — Venlo/Westland auksjoner</span></div>
+        <a href="https://www.nfo.nl" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;font-family:'DM Mono',monospace;color:#60a5fa">→ nfo.nl</a>
+      </div>
+
+      <div class="panel-card" style="border-left:3px solid #e879f9">
+        <div class="panel-title">🇲🇦 Freshplaza / Fruitnet</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.7">Handelsmedier med ukentlige prisrapporter for Marokko (jordbær, bringebær, tomat) og Spania (Huelva, Almería). Ingen CSV — brukes som kontekst.<br>
+        <span style="color:var(--text3)">Kilde for kvalitativ sesong- og markedsinformasjon</span></div>
+        <a href="https://www.freshplaza.com" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;font-family:'DM Mono',monospace;color:#60a5fa">→ freshplaza.com</a>
+      </div>
+
+      <div class="panel-card" style="border-left:3px solid #f87171">
+        <div class="panel-title">🌍 FAO FAOSTAT</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.7">FN matorganisasjon. Historiske produsentpriser per land og produkt. Oppdateres kvartalsvis — egnet for langsiktig trendsanalyse.<br>
+        <span style="color:var(--text3)">Last ned CSV direkte fra bulkdownloads</span></div>
+        <a href="https://www.fao.org/faostat/en/#data/PP" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;font-family:'DM Mono',monospace;color:#60a5fa">→ FAOSTAT produsentpriser</a>
+      </div>
+
     </div>
   </div>
 
@@ -744,12 +796,16 @@ function renderSidebar(){
       const src=d?d.source:'loading';
       const chgCls=!chg?'change-neutral':chg>0?'change-up':'change-down';
       const chgTxt=chg!==null?`${chg>0?'+':''}${chg}%${chg>0?'↑':chg<0?'↓':'→'}`:'...';
+      const srcLabel = src==='live'
+        ? (d.sourceNote&&d.sourceNote.includes('DEFRA')?'🇬🇧 UK':'🇪🇺 EU')
+        : src==='csv'?'📊 CSV':src==='pdf'?'📄 PDF':'○ EST';
+      const srcCls = src==='live'?'product-sub-live':(src==='csv'||src==='pdf')?'product-sub-csv':'product-sub';
       html+=`<button class="product-btn${key===currentProduct?' active':''}" onclick="selectProduct('${key}')">
         <div class="color-stripe" style="background:${cfg.color}"></div>
         <span class="product-emoji">${cfg.emoji}</span>
         <div class="product-info">
           <div class="product-name">${cfg.name}</div>
-          <div class="product-sub">${src==='live'?'● LIVE':src==='estimert'?'○ EST':'···'}</div>
+          <div class="product-sub ${srcCls}">${srcLabel}</div>
         </div>
         <div class="product-price-col">
           <div class="product-price" style="color:${cfg.color}">${price!==null?'€'+(price/100).toFixed(2):'···'}</div>
