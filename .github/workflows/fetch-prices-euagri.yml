@@ -1,0 +1,352 @@
+name: Fetch Fruit & Veg Prices — EU Agridata + DEFRA
+
+on:
+  schedule:
+    - cron: '0 8 * * 3'  # Onsdag 08:00 UTC (EU Agridata oppdaterer tirsdag/onsdag)
+  workflow_dispatch:      # Manuell kjøring
+
+jobs:
+  fetch-prices:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch prices — EU Agridata (via Cloudflare Worker) + DEFRA fallback
+        env:
+          # Legg inn din Cloudflare Worker URL som GitHub Secret:
+          # Settings → Secrets → Actions → New → EU_AGRI_WORKER_URL
+          # Eksempel: https://bama-euagri.erik-d2d.workers.dev
+          EU_AGRI_WORKER_URL: ${{ secrets.EU_AGRI_WORKER_URL }}
+        run: |
+          python3 << 'PYEOF'
+          import urllib.request
+          import urllib.parse
+          import csv
+          import json
+          import datetime
+          import io
+          import os
+          import re
+          import time
+
+          # ============================================================
+          # KONFIGURASJON
+          # ============================================================
+          WORKER_URL = os.environ.get("EU_AGRI_WORKER_URL", "").rstrip("/")
+          
+          # EU Agridata produkt → BAMA FreshIndex nøkkel
+          EU_PRODUCT_MAP = {
+            "Apples":                  "apple",
+            "Pears":                   "pear",
+            "Strawberries":            "strawberry",
+            "Raspberries":             "raspberry",
+            "Blueberries":             "blueberry",
+            "Cherries":                "cherry",
+            "Tomatoes":                "tomato",
+            "Cucumbers":               "cucumber",
+            "Sweet peppers":           "pepper",
+            "Lettuces":                "lettuce",
+            "Cauliflowers":            "cauliflower",
+            "Broccoli (calabrese)":    "broccoli",
+            "Carrots":                 "carrot",
+            "Peaches":                 "peach",
+            "Avocados":                "avocado",
+            "Bananas":                 "banana",
+            "Oranges":                 "orange",
+            "Table grapes":            "grape",
+            "Mangoes":                 "mango",
+          }
+
+          # UK DEFRA produktnavn → BAMA nøkkel (fallback)
+          DEFRA_PRODUCT_MAP = {
+            "apples":       "apple",
+            "pears":        "pear",
+            "strawberries": "strawberry",
+            "raspberries":  "raspberry",
+            "blueberries":  "blueberry",
+            "cherries":     "cherry",
+            "plums":        "peach",
+            "tomatoes":     "tomato",
+            "cucumbers":    "cucumber",
+            "capsicum":     "pepper",
+            "cauliflower":  "cauliflower",
+            "carrots":      "carrot",
+            "lettuce":      "lettuce",
+            "calabrese":    "broccoli",
+          }
+
+          results = {}
+          source_used = "unknown"
+
+          # ============================================================
+          # STEG 1: EU AGRIDATA via Cloudflare Worker
+          # ============================================================
+          eu_success = False
+
+          if WORKER_URL:
+            print(f"\n🇪🇺 Forsøker EU Agridata via Worker: {WORKER_URL}/prices")
+            try:
+              req = urllib.request.Request(
+                f"{WORKER_URL}/prices",
+                headers={"User-Agent": "BAMA-FreshIndex-Actions/3.0", "Accept": "application/json"}
+              )
+              with urllib.request.urlopen(req, timeout=60) as resp:
+                if resp.status == 200:
+                  payload = json.loads(resp.read())
+                  raw_data = payload.get("data", [])
+                  print(f"  Mottok {len(raw_data)} prisrader fra EU Agridata")
+
+                  if payload.get("errors"):
+                    print(f"  ⚠️  Delvis feil: {payload['errors']}")
+                else:
+                  print(f"  ❌ Worker returnerte HTTP {resp.status}")
+                  raw_data = []
+
+              # ---- Prosesser EU Agridata rader ----
+              # Grupper: bama_key → { dato: [priser] }
+              by_key_date = {}
+
+              for row in raw_data:
+                # Finn BAMA-nøkkel fra variety (f.eks. "Apples - Gala")
+                variety = row.get("variety", "")
+                eu_product = None
+                for eu_name in EU_PRODUCT_MAP:
+                  if variety.lower().startswith(eu_name.lower()):
+                    eu_product = eu_name
+                    break
+                # Prøv også direkte match
+                if not eu_product:
+                  for eu_name in EU_PRODUCT_MAP:
+                    if eu_name.lower() in variety.lower():
+                      eu_product = eu_name
+                      break
+
+                if not eu_product:
+                  continue
+
+                bama_key = EU_PRODUCT_MAP[eu_product]
+
+                try:
+                  price_str = row.get("price", "0").replace("€", "").replace(",", ".").strip()
+                  price = float(price_str)
+                  begin_date = row.get("beginDate", "")
+                  period = row.get("period", 0)
+                  year = row.get("year", 2025)
+                  # Lag sorterbar nøkkel: "YYYY-WW"
+                  sort_key = f"{year}-{int(period):02d}"
+                  label = f"Uke {period} {year}"
+
+                  if bama_key not in by_key_date:
+                    by_key_date[bama_key] = {}
+                  if sort_key not in by_key_date[bama_key]:
+                    by_key_date[bama_key][sort_key] = {"prices": [], "label": label}
+                  by_key_date[bama_key][sort_key]["prices"].append(price)
+
+                except (ValueError, KeyError) as e:
+                  continue
+
+              # Bygg tidsserie
+              for bama_key, date_map in by_key_date.items():
+                sorted_weeks = sorted(date_map.items())
+                prices = []
+                labels = []
+                for sort_key, v in sorted_weeks:
+                  avg = round(sum(v["prices"]) / len(v["prices"]), 2)
+                  prices.append(avg)
+                  labels.append(v["label"])
+
+                if len(prices) >= 2:
+                  latest = prices[-1]
+                  prev = prices[-2]
+                  week_change = round(((latest - prev) / prev) * 100, 1)
+                  results[bama_key] = {
+                    "prices": prices,
+                    "labels": labels,
+                    "latest": latest,
+                    "weekChange": week_change,
+                    "source": "live",
+                    "sourceNote": "EU Agridata Supply Chain Prices — Ex-packaging station price"
+                  }
+                  print(f"  ✅ {bama_key}: €{latest/100:.2f}/kg ({week_change:+.1f}%) — {len(prices)} uker")
+
+              if results:
+                eu_success = True
+                source_used = "EU Agridata"
+                print(f"\n✅ EU Agridata: {len(results)} produkter hentet")
+              else:
+                print("  ⚠️  Ingen brukbare data fra EU Agridata")
+
+            except Exception as e:
+              print(f"  ❌ EU Agridata Worker feil: {e}")
+          else:
+            print("⚠️  EU_AGRI_WORKER_URL ikke satt — hopper over EU Agridata")
+
+          # ============================================================
+          # STEG 2: UK DEFRA (alltid kjøres — supplement eller fallback)
+          # ============================================================
+          print(f"\n🇬🇧 Henter UK DEFRA data...")
+
+          defra_results = {}
+          csv_url = None
+
+          try:
+            INDEX_URL = "https://www.gov.uk/government/statistical-data-sets/wholesale-fruit-and-vegetable-prices-weekly-average"
+            req = urllib.request.Request(INDEX_URL, headers={
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            })
+            with urllib.request.urlopen(req, timeout=20) as resp:
+              html = resp.read().decode("utf-8", errors="ignore")
+
+            matches = re.findall(r'href="(https://assets\.publishing\.service\.gov\.uk[^"]+fruitvegprices[^"]+\.csv)"', html)
+            if not matches:
+              matches = re.findall(r'href="(/media/[^"]+fruitvegprices[^"]+\.csv)"', html)
+              matches = ["https://assets.publishing.service.gov.uk" + m for m in matches]
+
+            if matches:
+              csv_url = matches[-1]
+              print(f"  Fant DEFRA CSV: {csv_url}")
+            else:
+              raise Exception("Fant ingen CSV-lenke")
+
+          except Exception as e:
+            print(f"  ❌ Kunne ikke finne DEFRA CSV: {e}")
+
+          if csv_url:
+            try:
+              # Hent GBP/EUR-kurs
+              try:
+                fx_req = urllib.request.Request(
+                  "https://api.frankfurter.app/latest?from=GBP&to=EUR",
+                  headers={"User-Agent": "BAMA-FreshIndex/3.0"}
+                )
+                with urllib.request.urlopen(fx_req, timeout=10) as fx_resp:
+                  fx_data = json.loads(fx_resp.read())
+                  gbp_eur = fx_data["rates"]["EUR"]
+                  print(f"  GBP/EUR: {gbp_eur:.4f}")
+              except:
+                gbp_eur = 1.18
+                print(f"  GBP/EUR fallback: {gbp_eur}")
+
+              req = urllib.request.Request(csv_url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+              })
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                raw_csv = resp.read().decode("utf-8", errors="ignore")
+
+              reader = csv.DictReader(io.StringIO(raw_csv))
+              by_product_date = {}
+
+              for row in reader:
+                item = row.get("item", "").strip().lower()
+                bama_key = DEFRA_PRODUCT_MAP.get(item)
+                if not bama_key:
+                  continue
+                try:
+                  price_gbp = float(row["price"])
+                  if row.get("unit", "").strip() != "kg":
+                    continue
+                  date_str = row.get("date", "").strip()
+                  if bama_key not in by_product_date:
+                    by_product_date[bama_key] = {}
+                  if date_str not in by_product_date[bama_key]:
+                    by_product_date[bama_key][date_str] = []
+                  by_product_date[bama_key][date_str].append(price_gbp)
+                except (ValueError, KeyError):
+                  continue
+
+              for bama_key, date_map in by_product_date.items():
+                sorted_dates = sorted(date_map.items())
+                prices = []
+                labels = []
+                for date_str, gbp_prices in sorted_dates:
+                  avg_gbp = sum(gbp_prices) / len(gbp_prices)
+                  eur_100kg = round(avg_gbp * gbp_eur * 100, 2)
+                  prices.append(eur_100kg)
+                  try:
+                    d = datetime.date.fromisoformat(date_str)
+                    week = d.isocalendar()[1]
+                    labels.append(f"Uke {week} {d.year}")
+                  except:
+                    labels.append(date_str)
+
+                if len(prices) >= 2:
+                  latest = prices[-1]
+                  prev = prices[-2]
+                  week_change = round(((latest - prev) / prev) * 100, 1)
+                  defra_results[bama_key] = {
+                    "prices": prices,
+                    "labels": labels,
+                    "latest": latest,
+                    "weekChange": week_change,
+                    "source": "live",
+                    "sourceNote": f"UK DEFRA grossistpriser (GBP/kg × {gbp_eur:.4f} = EUR/100kg)"
+                  }
+                  print(f"  ✅ {bama_key}: €{latest/100:.2f}/kg ({week_change:+.1f}%)")
+
+              print(f"\n✅ DEFRA: {len(defra_results)} produkter hentet")
+
+            except Exception as e:
+              print(f"  ❌ DEFRA feil: {e}")
+
+          # ============================================================
+          # STEG 3: Merge — EU Agridata prioriteres, DEFRA supplementerer
+          # ============================================================
+          print(f"\n🔀 Merger datakilder...")
+
+          merged = {}
+
+          # Start med EU Agridata (høyest prioritet)
+          for key, data in results.items():
+            merged[key] = data
+            print(f"  🇪🇺 {key} — fra EU Agridata")
+
+          # Suppler med DEFRA for produkter som mangler i EU
+          defra_added = 0
+          for key, data in defra_results.items():
+            if key not in merged:
+              merged[key] = data
+              print(f"  🇬🇧 {key} — fra DEFRA (EU mangler)")
+              defra_added += 1
+            else:
+              print(f"  ⏭  {key} — DEFRA hoppes over (EU finnes)")
+
+          print(f"\n  Totalt: {len(merged)} produkter")
+          print(f"  EU Agridata: {len(results)}, DEFRA-supplement: {defra_added}")
+
+          # ============================================================
+          # STEG 4: Skriv prices.json
+          # ============================================================
+          output = {
+            "fetched": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "week": datetime.date.today().isocalendar()[1],
+            "year": datetime.date.today().year,
+            "source": source_used if eu_success else "UK DEFRA (EU Agridata ikke tilgjengelig)",
+            "sourceDetail": {
+              "euAgridata": len(results),
+              "defraSuplement": defra_added,
+              "workerUrl": WORKER_URL or "ikke konfigurert"
+            },
+            "stage": "Ex-packaging station price",
+            "products": merged,
+            "liveCount": len(merged),
+            "totalCount": 19
+          }
+
+          with open("prices.json", "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+
+          print(f"\n✅ prices.json skrevet med {len(merged)} produkter")
+          print(f"   Kilde: {output['source']}")
+          PYEOF
+
+      - name: Commit and push prices.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prices.json
+          git diff --staged --quiet || git commit -m "📊 Prisoppdatering uke $(date +%V) $(date +%Y) — EU Agridata + DEFRA"
+          git push
