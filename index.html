@@ -226,7 +226,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
     <div class="logo-icon">🌿</div>
     <div>
       <div class="logo-text">BAMA FreshIndex</div>
-      <div class="logo-sub">Markedsprismonitor · EU Agridata Live</div>
+      <div class="logo-sub">Markedsprismonitor · EU Agridata + UK DEFRA</div>
     </div>
   </div>
   <div class="header-right">
@@ -413,11 +413,11 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
         <a href="https://www.gov.uk/government/statistical-data-sets/wholesale-fruit-and-vegetable-prices-weekly-average" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;font-family:'DM Mono',monospace;color:#60a5fa">→ Last ned fra gov.uk</a>
       </div>
 
-      <div class="panel-card" style="border-left:3px solid #60a5fa">
-        <div class="panel-title">🇪🇺 EU Agridata (manuell)</div>
-        <div style="font-size:11px;color:var(--text2);line-height:1.7">EU Agridata blokkerer automatisk henting, men CSV-eksport fungerer fra nettleseren. Velg produkt → eksporter ukentlige priser.<br>
-        <span style="color:var(--text3)">Dekning: alle 19 produkter · Prisnivå: ex-packaging, farmgate, retail</span></div>
-        <a href="https://agridata.ec.europa.eu/extensions/DashboardFruitsVegetables/FruitsVegetablesMarkets.html" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;font-family:'DM Mono',monospace;color:#60a5fa">→ Åpne EU Agridata</a>
+      <div class="panel-card" style="border-left:3px solid #4ade80">
+        <div class="panel-title">🇪🇺 EU Agridata (automatisk via Worker)</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.7">Hentes nå automatisk via Cloudflare Worker proxy. Dekker alle 19 produkter med ex-packaging, farmgate og retail-priser.<br>
+        <span style="color:var(--text3)">Konfigurert via GitHub Secret: EU_AGRI_WORKER_URL</span></div>
+        <a href="https://agridata.ec.europa.eu/extensions/DashboardFruitAndVeg/FruitAndVegetablePricesSC.html" target="_blank" style="display:inline-block;margin-top:8px;font-size:10px;font-family:'DM Mono',monospace;color:#60a5fa">→ Se EU Agridata Supply Chain dashboard</a>
       </div>
 
       <div class="panel-card" style="border-left:3px solid #fb923c">
@@ -673,11 +673,13 @@ async function loadAllData(){
     if(!res.ok)throw new Error('HTTP '+res.status);
     const json=await res.json();
 
-    let liveCount=0;
+    let liveCount=0, euCount=0, defraCount=0;
     Object.entries(json.products||{}).forEach(([key,d])=>{
       if(d&&d.prices&&d.prices.length>2){
-        liveData[key]={prices:d.prices,labels:d.labels,latest:d.latest,weekChange:d.weekChange,source:'live'};
+        liveData[key]={prices:d.prices,labels:d.labels,latest:d.latest,weekChange:d.weekChange,source:'live',sourceNote:d.sourceNote||''};
         liveCount++;
+        if((d.sourceNote||'').includes('EU Agridata')) euCount++;
+        else if((d.sourceNote||'').includes('DEFRA')) defraCount++;
       }
     });
 
@@ -685,17 +687,21 @@ async function loadAllData(){
     buildMainChart(currentProduct,'6m');buildDetailPanels(currentProduct);
 
     const fetched=json.fetched?new Date(json.fetched).toLocaleDateString('no-NO',{day:'2-digit',month:'2-digit',year:'numeric'}):'ukjent';
+    const srcDetail=json.sourceDetail||{};
     if(liveCount>0){
       updateStatus('live',`${liveCount} LIVE · Uke ${json.week} ${json.year}`);
-      showBanner('ok',`✅ ${liveCount} produkter med EU Agridata-priser. Sist oppdatert ${fetched}.`);
+      let bannerMsg=`✅ ${liveCount} produkter oppdatert. Sist oppdatert ${fetched}.`;
+      if(srcDetail.euAgridata>0) bannerMsg+=` 🇪🇺 EU Agridata: ${srcDetail.euAgridata}`;
+      if(srcDetail.defraSuplement>0) bannerMsg+=` · 🇬🇧 DEFRA supplement: ${srcDetail.defraSuplement}`;
+      showBanner('ok',bannerMsg);
     }else{
       updateStatus('fallback','SESONG-ESTIMAT');
-      showBanner('warn','⚠️ prices.json er tom eller ikke generert ennå. Kjør GitHub Actions workflow manuelt første gang.');
+      showBanner('warn','⚠️ prices.json er tom. Kjør GitHub Actions workflow manuelt første gang.');
     }
   }catch(e){
     // prices.json ikke tilgjengelig ennå — estimater vises allerede
     updateStatus('fallback','SESONG-ESTIMAT');
-    showBanner('warn','⚠️ prices.json ikke funnet ennå. Kjør GitHub Actions workflow manuelt: Actions → Fetch EU Agridata Weekly → Run workflow.');
+    showBanner('warn','⚠️ prices.json ikke funnet ennå. Kjør GitHub Actions workflow manuelt: Actions → "Fetch Fruit & Veg Prices — EU Agridata + DEFRA" → Run workflow.');
   }
   buildCompareChart();
 }
@@ -961,7 +967,15 @@ function buildDetailPanels(key){
         <div class="info-row"><span class="info-key">EU PRODUKT-ID</span><span style="font-family:'DM Mono',monospace;font-size:11px">${cfg.euProduct||'Ikke i EU Agridata'}</span></div>
         <div class="info-row"><span class="info-key">PRISNIVÅ</span><span style="font-family:'DM Mono',monospace">€${(d.latest/100).toFixed(2)} ${cfg.unit}</span></div>
         <div class="info-row"><span class="info-key">UKENTLIG ENDRING</span><span style="font-family:'DM Mono',monospace;color:${d.weekChange>0?'var(--up)':d.weekChange<0?'var(--down)':'var(--neutral)'}">${d.weekChange>0?'+':''}${d.weekChange}%</span></div>
-        <div class="info-row"><span class="info-key">KILDE</span><span style="color:${d.source==='live'?'var(--up)':'var(--neutral)'}">${d.source==='live'?'✅ EU Agridata Live':'⚠️ Sesong-estimat'}</span></div>
+        <div class="info-row"><span class="info-key">KILDE</span><span style="color:${d.source==='live'?'var(--up)':'var(--neutral)'}">
+          ${d.source==='live'
+            ? (d.sourceNote&&d.sourceNote.includes('DEFRA')
+                ? '🇬🇧 UK DEFRA grossistpriser'
+                : d.sourceNote&&d.sourceNote.includes('EU Agridata')
+                  ? '🇪🇺 EU Agridata Supply Chain'
+                  : '✅ Live data')
+            : '⚠️ Sesong-estimat'}
+        </span></div>
         <div class="info-row"><span class="info-key">KATEGORI</span><span>${cfg.cat==='frukt'?'🍎 Frukt':cfg.cat==='baer'?'🫐 Bær':cfg.cat==='sopp'?'🍄 Sopp':'🥬 Grønnsaker'}</span></div>
       </div>
     </div>`;
