@@ -17,9 +17,6 @@ jobs:
 
       - name: Fetch prices — EU Agridata (via Cloudflare Worker) + DEFRA fallback
         env:
-          # Legg inn din Cloudflare Worker URL som GitHub Secret:
-          # Settings → Secrets → Actions → New → EU_AGRI_WORKER_URL
-          # Eksempel: https://bama-euagri.erik-d2d.workers.dev
           EU_AGRI_WORKER_URL: ${{ secrets.EU_AGRI_WORKER_URL }}
         run: |
           python3 << 'PYEOF'
@@ -33,12 +30,8 @@ jobs:
           import re
           import time
 
-          # ============================================================
-          # KONFIGURASJON
-          # ============================================================
           WORKER_URL = os.environ.get("EU_AGRI_WORKER_URL", "").rstrip("/")
           
-          # EU Agridata produkt → BAMA FreshIndex nøkkel
           EU_PRODUCT_MAP = {
             "Apples":                  "apple",
             "Pears":                   "pear",
@@ -61,7 +54,6 @@ jobs:
             "Mangoes":                 "mango",
           }
 
-          # UK DEFRA produktnavn → BAMA nøkkel (fallback)
           DEFRA_PRODUCT_MAP = {
             "apples":       "apple",
             "pears":        "pear",
@@ -82,9 +74,6 @@ jobs:
           results = {}
           source_used = "unknown"
 
-          # ============================================================
-          # STEG 1: EU AGRIDATA via Cloudflare Worker
-          # ============================================================
           eu_success = False
 
           if WORKER_URL:
@@ -99,32 +88,26 @@ jobs:
                   payload = json.loads(resp.read())
                   raw_data = payload.get("data", [])
                   print(f"  Mottok {len(raw_data)} prisrader fra EU Agridata")
-
                   if payload.get("errors"):
                     print(f"  ⚠️  Delvis feil: {payload['errors']}")
                 else:
                   print(f"  ❌ Worker returnerte HTTP {resp.status}")
                   raw_data = []
 
-              # ---- Prosesser EU Agridata rader ----
-              # Grupper: bama_key → { dato: [priser] }
               by_key_date = {}
 
               for row in raw_data:
-                # Finn BAMA-nøkkel fra variety (f.eks. "Apples - Gala")
                 variety = row.get("variety", "")
                 eu_product = None
                 for eu_name in EU_PRODUCT_MAP:
                   if variety.lower().startswith(eu_name.lower()):
                     eu_product = eu_name
                     break
-                # Prøv også direkte match
                 if not eu_product:
                   for eu_name in EU_PRODUCT_MAP:
                     if eu_name.lower() in variety.lower():
                       eu_product = eu_name
                       break
-
                 if not eu_product:
                   continue
 
@@ -133,10 +116,8 @@ jobs:
                 try:
                   price_str = row.get("price", "0").replace("€", "").replace(",", ".").strip()
                   price = float(price_str)
-                  begin_date = row.get("beginDate", "")
                   period = row.get("period", 0)
                   year = row.get("year", 2025)
-                  # Lag sorterbar nøkkel: "YYYY-WW"
                   sort_key = f"{year}-{int(period):02d}"
                   label = f"Uke {period} {year}"
 
@@ -146,10 +127,9 @@ jobs:
                     by_key_date[bama_key][sort_key] = {"prices": [], "label": label}
                   by_key_date[bama_key][sort_key]["prices"].append(price)
 
-                except (ValueError, KeyError) as e:
+                except (ValueError, KeyError):
                   continue
 
-              # Bygg tidsserie
               for bama_key, date_map in by_key_date.items():
                 sorted_weeks = sorted(date_map.items())
                 prices = []
@@ -185,9 +165,6 @@ jobs:
           else:
             print("⚠️  EU_AGRI_WORKER_URL ikke satt — hopper over EU Agridata")
 
-          # ============================================================
-          # STEG 2: UK DEFRA (alltid kjøres — supplement eller fallback)
-          # ============================================================
           print(f"\n🇬🇧 Henter UK DEFRA data...")
 
           defra_results = {}
@@ -217,7 +194,6 @@ jobs:
 
           if csv_url:
             try:
-              # Hent GBP/EUR-kurs
               try:
                 fx_req = urllib.request.Request(
                   "https://api.frankfurter.app/latest?from=GBP&to=EUR",
@@ -292,19 +268,14 @@ jobs:
             except Exception as e:
               print(f"  ❌ DEFRA feil: {e}")
 
-          # ============================================================
-          # STEG 3: Merge — EU Agridata prioriteres, DEFRA supplementerer
-          # ============================================================
           print(f"\n🔀 Merger datakilder...")
 
           merged = {}
 
-          # Start med EU Agridata (høyest prioritet)
           for key, data in results.items():
             merged[key] = data
             print(f"  🇪🇺 {key} — fra EU Agridata")
 
-          # Suppler med DEFRA for produkter som mangler i EU
           defra_added = 0
           for key, data in defra_results.items():
             if key not in merged:
@@ -315,11 +286,7 @@ jobs:
               print(f"  ⏭  {key} — DEFRA hoppes over (EU finnes)")
 
           print(f"\n  Totalt: {len(merged)} produkter")
-          print(f"  EU Agridata: {len(results)}, DEFRA-supplement: {defra_added}")
 
-          # ============================================================
-          # STEG 4: Skriv prices.json
-          # ============================================================
           output = {
             "fetched": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "week": datetime.date.today().isocalendar()[1],
@@ -340,7 +307,6 @@ jobs:
             json.dump(output, f, indent=2, ensure_ascii=False)
 
           print(f"\n✅ prices.json skrevet med {len(merged)} produkter")
-          print(f"   Kilde: {output['source']}")
           PYEOF
 
       - name: Commit and push prices.json
@@ -349,4 +315,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add prices.json
           git diff --staged --quiet || git commit -m "📊 Prisoppdatering uke $(date +%V) $(date +%Y) — EU Agridata + DEFRA"
+          git pull --rebase origin main
           git push
